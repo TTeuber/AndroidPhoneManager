@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.BlockWithRules
 import com.tyler.selfcontrol.data.model.Lock
 import com.tyler.selfcontrol.data.model.LockMode
@@ -257,6 +258,12 @@ private fun BlockCard(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
+    val stateLabel = when (block.state) {
+        BlockState.DISABLED -> "Off"
+        BlockState.ALWAYS_ON -> "Always"
+        BlockState.SCHEDULED -> "Scheduled"
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -296,6 +303,8 @@ private fun BlockCard(
                         append("$appCount app${if (appCount != 1) "s" else ""}")
                         append(" | ")
                         append("$websiteCount website${if (websiteCount != 1) "s" else ""}")
+                        append(" | ")
+                        append(stateLabel)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -306,6 +315,19 @@ private fun BlockCard(
                         text = lockStatusText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                // Show active/inactive for scheduled blocks
+                if (block.state == BlockState.SCHEDULED) {
+                    Text(
+                        text = if (block.isEnabled) "Currently active" else "Currently inactive",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (block.isEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -321,11 +343,14 @@ private fun BlockCard(
                         )
                     }
                 }
-                Switch(
-                    checked = block.isEnabled,
-                    onCheckedChange = { onToggle() },
-                    enabled = !isLocked || !block.isEnabled // Can enable, but can't disable if locked
-                )
+                // For scheduled blocks, don't show toggle (controlled by schedule)
+                if (block.state != BlockState.SCHEDULED) {
+                    Switch(
+                        checked = block.isEnabled,
+                        onCheckedChange = { onToggle() },
+                        enabled = !isLocked || !block.isEnabled // Can enable, but can't disable if locked
+                    )
+                }
             }
         }
     }

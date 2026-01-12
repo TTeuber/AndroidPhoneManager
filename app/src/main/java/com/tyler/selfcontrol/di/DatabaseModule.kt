@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.tyler.selfcontrol.data.dao.AppRuleDao
 import com.tyler.selfcontrol.data.dao.BlockDao
 import com.tyler.selfcontrol.data.dao.LockDao
+import com.tyler.selfcontrol.data.dao.ScheduleDao
 import com.tyler.selfcontrol.data.dao.WebsiteRuleDao
 import com.tyler.selfcontrol.data.database.SelfControlDatabase
 import dagger.Module
@@ -25,7 +26,9 @@ object DatabaseModule {
             context,
             SelfControlDatabase::class.java,
             SelfControlDatabase.DATABASE_NAME
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
@@ -46,5 +49,10 @@ object DatabaseModule {
     @Provides
     fun provideLockDao(database: SelfControlDatabase): LockDao {
         return database.lockDao()
+    }
+
+    @Provides
+    fun provideScheduleDao(database: SelfControlDatabase): ScheduleDao {
+        return database.scheduleDao()
     }
 }

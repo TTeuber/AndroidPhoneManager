@@ -8,11 +8,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tyler.selfcontrol.data.model.AppRule
 import com.tyler.selfcontrol.data.model.Block
+import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.Lock
 import com.tyler.selfcontrol.data.model.LockMode
+import com.tyler.selfcontrol.data.model.Schedule
 import com.tyler.selfcontrol.data.model.WebsiteRule
 import com.tyler.selfcontrol.data.repository.BlockRepository
 import com.tyler.selfcontrol.domain.LockManager
+import com.tyler.selfcontrol.domain.ScheduleManager
+import java.time.LocalTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -38,6 +42,8 @@ data class BlockEditUiState(
     val lock: Lock? = null,
     val isLocked: Boolean = false,
     val lockStatusText: String = "Not locked",
+    val schedule: Schedule? = null,
+    val scheduleStatusText: String = "No schedule",
     val isLoading: Boolean = true,
     val lockError: String? = null
 )
@@ -47,6 +53,7 @@ class BlockEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val blockRepository: BlockRepository,
     private val lockManager: LockManager,
+    private val scheduleManager: ScheduleManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -70,6 +77,8 @@ class BlockEditViewModel @Inject constructor(
             if (blockWithRules != null) {
                 val lock = blockRepository.getLockForBlock(blockId)
                 val isLocked = lockManager.isBlockLocked(blockId)
+                val schedule = blockRepository.getScheduleForBlock(blockId)
+                val scheduleStatusText = scheduleManager.getScheduleStatusDescription(blockId)
                 _uiState.value = BlockEditUiState(
                     block = blockWithRules.block,
                     appRules = blockWithRules.appRules,
@@ -77,6 +86,8 @@ class BlockEditViewModel @Inject constructor(
                     lock = lock,
                     isLocked = isLocked,
                     lockStatusText = lockManager.getLockStatusDescription(lock),
+                    schedule = schedule,
+                    scheduleStatusText = scheduleStatusText,
                     isLoading = false
                 )
             } else {
@@ -97,10 +108,14 @@ class BlockEditViewModel @Inject constructor(
     private suspend fun refreshLockStatus() {
         val lock = blockRepository.getLockForBlock(blockId)
         val isLocked = lockManager.isBlockLocked(blockId)
+        val schedule = blockRepository.getScheduleForBlock(blockId)
+        val scheduleStatusText = scheduleManager.getScheduleStatusDescription(blockId)
         _uiState.value = _uiState.value.copy(
             lock = lock,
             isLocked = isLocked,
-            lockStatusText = lockManager.getLockStatusDescription(lock)
+            lockStatusText = lockManager.getLockStatusDescription(lock),
+            schedule = schedule,
+            scheduleStatusText = scheduleStatusText
         )
     }
 
@@ -229,5 +244,112 @@ class BlockEditViewModel @Inject constructor(
 
     fun clearLockError() {
         _uiState.value = _uiState.value.copy(lockError = null)
+    }
+
+    // Schedule operations
+
+    fun setBlockState(state: BlockState) {
+        if (_uiState.value.isLocked) return
+        viewModelScope.launch {
+            blockRepository.setBlockState(blockId, state)
+
+            when (state) {
+                BlockState.DISABLED -> {
+                    // Disable the block
+                    blockRepository.setBlockEnabled(blockId, false)
+                }
+                BlockState.ALWAYS_ON -> {
+                    // Enable the block permanently
+                    blockRepository.setBlockEnabled(blockId, true)
+                }
+                BlockState.SCHEDULED -> {
+                    // Create default schedule if none exists
+                    val existingSchedule = blockRepository.getScheduleForBlock(blockId)
+                    if (existingSchedule == null) {
+                        // Default: weekdays 9:00 - 17:00
+                        blockRepository.setSchedule(
+                            blockId,
+                            daysOfWeek = Schedule.WEEKDAYS,
+                            startTimeMinutes = 9 * 60,
+                            endTimeMinutes = 17 * 60
+                        )
+                    }
+                    // Process schedule immediately to set correct enabled state
+                    scheduleManager.processSchedules()
+                }
+            }
+            refreshBlock()
+        }
+    }
+
+    fun setSchedule(daysOfWeek: Int, startTime: LocalTime, endTime: LocalTime) {
+        if (_uiState.value.isLocked) return
+        viewModelScope.launch {
+            val startMinutes = Schedule.localTimeToMinutes(startTime)
+            val endMinutes = Schedule.localTimeToMinutes(endTime)
+            blockRepository.setSchedule(blockId, daysOfWeek, startMinutes, endMinutes)
+            // Process schedule immediately to update enabled state
+            scheduleManager.processSchedules()
+            refreshBlock()
+        }
+    }
+
+    fun toggleDay(dayBit: Int) {
+        if (_uiState.value.isLocked) return
+        viewModelScope.launch {
+            val currentSchedule = _uiState.value.schedule ?: return@launch
+            val newDays = currentSchedule.daysOfWeek xor dayBit
+            blockRepository.setSchedule(
+                blockId,
+                newDays,
+                currentSchedule.startTimeMinutes,
+                currentSchedule.endTimeMinutes
+            )
+            scheduleManager.processSchedules()
+            refreshBlock()
+        }
+    }
+
+    fun setScheduleStartTime(time: LocalTime) {
+        if (_uiState.value.isLocked) return
+        viewModelScope.launch {
+            val currentSchedule = _uiState.value.schedule ?: return@launch
+            val startMinutes = Schedule.localTimeToMinutes(time)
+            blockRepository.setSchedule(
+                blockId,
+                currentSchedule.daysOfWeek,
+                startMinutes,
+                currentSchedule.endTimeMinutes
+            )
+            scheduleManager.processSchedules()
+            refreshBlock()
+        }
+    }
+
+    fun setScheduleEndTime(time: LocalTime) {
+        if (_uiState.value.isLocked) return
+        viewModelScope.launch {
+            val currentSchedule = _uiState.value.schedule ?: return@launch
+            val endMinutes = Schedule.localTimeToMinutes(time)
+            blockRepository.setSchedule(
+                blockId,
+                currentSchedule.daysOfWeek,
+                currentSchedule.startTimeMinutes,
+                endMinutes
+            )
+            scheduleManager.processSchedules()
+            refreshBlock()
+        }
+    }
+
+    private suspend fun refreshBlock() {
+        val block = blockRepository.getBlockById(blockId)
+        val schedule = blockRepository.getScheduleForBlock(blockId)
+        val scheduleStatusText = scheduleManager.getScheduleStatusDescription(blockId)
+        _uiState.value = _uiState.value.copy(
+            block = block,
+            schedule = schedule,
+            scheduleStatusText = scheduleStatusText
+        )
     }
 }

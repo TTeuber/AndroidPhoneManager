@@ -3,6 +3,8 @@ package com.tyler.selfcontrol.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +34,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +43,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -57,7 +65,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.LockMode
+import com.tyler.selfcontrol.data.model.Schedule
 import com.tyler.selfcontrol.data.model.WebsiteRule
 import com.tyler.selfcontrol.ui.viewmodel.BlockEditViewModel
 import com.tyler.selfcontrol.ui.viewmodel.InstalledApp
@@ -83,6 +93,8 @@ fun BlockEditScreen(
     var editedName by remember { mutableStateOf("") }
     var showLockDialog by remember { mutableStateOf(false) }
     var showForeverConfirmDialog by remember { mutableStateOf(false) }
+    var showScheduleStartTimePicker by remember { mutableStateOf(false) }
+    var showScheduleEndTimePicker by remember { mutableStateOf(false) }
 
     if (uiState.isLoading) {
         Scaffold { paddingValues ->
@@ -228,6 +240,28 @@ fun BlockEditScreen(
                 }
             }
 
+            // Schedule Section
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Schedule",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            item {
+                ScheduleCard(
+                    block = block,
+                    schedule = uiState.schedule,
+                    scheduleStatusText = uiState.scheduleStatusText,
+                    isLocked = uiState.isLocked,
+                    onStateChange = { viewModel.setBlockState(it) },
+                    onToggleDay = { viewModel.toggleDay(it) },
+                    onEditStartTime = { showScheduleStartTimePicker = true },
+                    onEditEndTime = { showScheduleEndTimePicker = true }
+                )
+            }
+
             // Lock Section
             item {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -312,6 +346,76 @@ fun BlockEditScreen(
             confirmButton = {
                 TextButton(onClick = { viewModel.clearLockError() }) {
                     Text("OK")
+                }
+            }
+        )
+    }
+
+    // Schedule Start Time Picker
+    if (showScheduleStartTimePicker) {
+        val schedule = uiState.schedule
+        val initialTime = schedule?.getStartTime() ?: LocalTime.of(9, 0)
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialTime.hour,
+            initialMinute = initialTime.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showScheduleStartTimePicker = false },
+            title = { Text("Schedule Start Time") },
+            text = {
+                TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setScheduleStartTime(
+                            LocalTime.of(timePickerState.hour, timePickerState.minute)
+                        )
+                        showScheduleStartTimePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScheduleStartTimePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Schedule End Time Picker
+    if (showScheduleEndTimePicker) {
+        val schedule = uiState.schedule
+        val initialTime = schedule?.getEndTime() ?: LocalTime.of(17, 0)
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialTime.hour,
+            initialMinute = initialTime.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showScheduleEndTimePicker = false },
+            title = { Text("Schedule End Time") },
+            text = {
+                TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setScheduleEndTime(
+                            LocalTime.of(timePickerState.hour, timePickerState.minute)
+                        )
+                        showScheduleEndTimePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScheduleEndTimePicker = false }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -911,6 +1015,176 @@ private fun LockDialog(
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun ScheduleCard(
+    block: com.tyler.selfcontrol.data.model.Block,
+    schedule: Schedule?,
+    scheduleStatusText: String,
+    isLocked: Boolean,
+    onStateChange: (BlockState) -> Unit,
+    onToggleDay: (Int) -> Unit,
+    onEditStartTime: () -> Unit,
+    onEditEndTime: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Block State Selector
+            Text(
+                text = "Activation Mode",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                SegmentedButton(
+                    selected = block.state == BlockState.DISABLED,
+                    onClick = { if (!isLocked) onStateChange(BlockState.DISABLED) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                    enabled = !isLocked
+                ) {
+                    Text("Off", style = MaterialTheme.typography.labelSmall)
+                }
+                SegmentedButton(
+                    selected = block.state == BlockState.ALWAYS_ON,
+                    onClick = { if (!isLocked) onStateChange(BlockState.ALWAYS_ON) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                    enabled = !isLocked
+                ) {
+                    Text("Always", style = MaterialTheme.typography.labelSmall)
+                }
+                SegmentedButton(
+                    selected = block.state == BlockState.SCHEDULED,
+                    onClick = { if (!isLocked) onStateChange(BlockState.SCHEDULED) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                    enabled = !isLocked
+                ) {
+                    Text("Schedule", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            // Schedule configuration (only shown when SCHEDULED)
+            if (block.state == BlockState.SCHEDULED && schedule != null) {
+                HorizontalDivider()
+
+                // Days of week
+                Text(
+                    text = "Active Days",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    DayChip("Sun", Schedule.SUNDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Mon", Schedule.MONDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Tue", Schedule.TUESDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Wed", Schedule.WEDNESDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Thu", Schedule.THURSDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Fri", Schedule.FRIDAY, schedule, isLocked, onToggleDay)
+                    DayChip("Sat", Schedule.SATURDAY, schedule, isLocked, onToggleDay)
+                }
+
+                // Time range
+                Text(
+                    text = "Active Time",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { if (!isLocked) onEditStartTime() },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLocked
+                    ) {
+                        val startTime = schedule.getStartTime()
+                        Text(String.format("%02d:%02d", startTime.hour, startTime.minute))
+                    }
+                    Text("-")
+                    OutlinedButton(
+                        onClick = { if (!isLocked) onEditEndTime() },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLocked
+                    ) {
+                        val endTime = schedule.getEndTime()
+                        Text(String.format("%02d:%02d", endTime.hour, endTime.minute))
+                    }
+                }
+
+                if (schedule.isOvernightSchedule()) {
+                    Text(
+                        text = "Overnight schedule (spans midnight)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
+                // Status
+                HorizontalDivider()
+                Text(
+                    text = scheduleStatusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (block.isEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            } else if (block.state == BlockState.ALWAYS_ON) {
+                Text(
+                    text = "Block is always active",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else if (block.state == BlockState.DISABLED) {
+                Text(
+                    text = "Block is disabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayChip(
+    label: String,
+    dayBit: Int,
+    schedule: Schedule,
+    isLocked: Boolean,
+    onToggleDay: (Int) -> Unit
+) {
+    FilterChip(
+        selected = schedule.isDayEnabled(dayBit),
+        onClick = { if (!isLocked) onToggleDay(dayBit) },
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        enabled = !isLocked,
+        modifier = Modifier.size(width = 56.dp, height = 32.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    )
 }
 
 @Composable

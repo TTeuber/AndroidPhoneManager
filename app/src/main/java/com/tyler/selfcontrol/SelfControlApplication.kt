@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.tyler.selfcontrol.data.datastore.SettingsDataStore
+import com.tyler.selfcontrol.worker.ScheduleWorker
 import com.tyler.selfcontrol.worker.UnlockWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -31,10 +32,11 @@ class SelfControlApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        // Schedule the periodic unlock worker with correct interval based on dev mode
+        // Schedule the periodic workers with correct interval based on dev mode
         applicationScope.launch {
             val devMode = settingsDataStore.devModeFlow.first()
             UnlockWorker.schedule(this@SelfControlApplication, devMode)
+            ScheduleWorker.schedule(this@SelfControlApplication, devMode)
         }
     }
 }
