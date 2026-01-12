@@ -269,7 +269,7 @@ class BlockEditViewModel @Inject constructor(
                             endTimeMinutes = 17 * 60
                         )
                     }
-                    // Process schedule immediately to set correct enabled state
+                    // Process schedule immediately to set correct isScheduleActive state
                     scheduleManager.processSchedules()
                 }
             }

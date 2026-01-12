@@ -17,7 +17,14 @@ interface AppRuleDao {
     @Query("SELECT * FROM app_rules WHERE blockId = :blockId")
     suspend fun getAppRulesForBlockOnce(blockId: Long): List<AppRule>
 
-    @Query("SELECT DISTINCT packageName FROM app_rules WHERE blockId IN (SELECT id FROM blocks WHERE isEnabled = 1)")
+    @Query("""
+        SELECT DISTINCT packageName FROM app_rules
+        WHERE blockId IN (
+            SELECT id FROM blocks
+            WHERE isEnabled = 1
+            AND (state = 'ALWAYS_ON' OR (state = 'SCHEDULED' AND isScheduleActive = 1))
+        )
+    """)
     fun getBlockedPackageNames(): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

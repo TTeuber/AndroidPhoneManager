@@ -70,7 +70,7 @@ class ScheduleManager @Inject constructor(
     }
 
     /**
-     * Process all scheduled blocks and update their enabled state.
+     * Process all scheduled blocks and update their isScheduleActive state.
      *
      * @return Number of blocks whose state changed
      */
@@ -82,9 +82,9 @@ class ScheduleManager @Inject constructor(
             val block = blockRepository.getBlockById(schedule.blockId) ?: continue
             if (block.state != BlockState.SCHEDULED) continue
 
-            val shouldBeEnabled = isScheduleActive(schedule)
-            if (block.isEnabled != shouldBeEnabled) {
-                blockRepository.setBlockEnabled(schedule.blockId, shouldBeEnabled)
+            val shouldBeActive = isScheduleActive(schedule)
+            if (block.isScheduleActive != shouldBeActive) {
+                blockRepository.setScheduleActive(schedule.blockId, shouldBeActive)
                 changedCount++
             }
         }

@@ -47,6 +47,9 @@ interface BlockDao {
     @Query("UPDATE blocks SET isEnabled = :enabled WHERE id = :blockId")
     suspend fun setEnabled(blockId: Long, enabled: Boolean)
 
+    @Query("UPDATE blocks SET isScheduleActive = :active WHERE id = :blockId")
+    suspend fun setScheduleActive(blockId: Long, active: Boolean)
+
     @Query("DELETE FROM blocks WHERE id = :blockId")
     suspend fun deleteById(blockId: Long)
 }

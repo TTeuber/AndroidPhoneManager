@@ -263,12 +263,16 @@ private fun BlockCard(
         BlockState.SCHEDULED -> "Scheduled"
     }
 
+    // Block is actively blocking when enabled AND (always-on OR schedule is active)
+    val isActivelyBlocking = block.isEnabled &&
+        (block.state == BlockState.ALWAYS_ON || block.isScheduleActive)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (block.isEnabled) {
+            containerColor = if (isActivelyBlocking) {
                 MaterialTheme.colorScheme.secondaryContainer
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
@@ -317,12 +321,18 @@ private fun BlockCard(
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
-                // Show active/inactive for scheduled blocks
+                // Show schedule status for scheduled blocks
                 if (block.state == BlockState.SCHEDULED) {
+                    val isBlocking = block.isEnabled && block.isScheduleActive
+                    val statusText = when {
+                        !block.isEnabled -> "Disabled by toggle"
+                        !block.isScheduleActive -> "Schedule inactive"
+                        else -> "Currently blocking"
+                    }
                     Text(
-                        text = if (block.isEnabled) "Currently active" else "Currently inactive",
+                        text = statusText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (block.isEnabled) {
+                        color = if (isBlocking) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant

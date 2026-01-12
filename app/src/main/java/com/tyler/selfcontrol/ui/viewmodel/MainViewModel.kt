@@ -3,11 +3,9 @@ package com.tyler.selfcontrol.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tyler.selfcontrol.data.model.Block
-import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.BlockWithRules
 import com.tyler.selfcontrol.data.repository.BlockRepository
 import com.tyler.selfcontrol.domain.LockManager
-import com.tyler.selfcontrol.domain.ScheduleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,8 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val blockRepository: BlockRepository,
-    private val lockManager: LockManager,
-    private val scheduleManager: ScheduleManager
+    private val lockManager: LockManager
 ) : ViewModel() {
 
     val blocks: StateFlow<List<BlockWithRules>> = blockRepository.getAllBlocksWithRules()
@@ -42,20 +39,7 @@ class MainViewModel @Inject constructor(
                 // Block is locked, cannot disable
                 return@launch
             }
-
-            if (block.isEnabled) {
-                // Turning OFF - always allowed (user override)
-                blockRepository.setBlockEnabled(block.id, false)
-            } else {
-                // Turning ON
-                if (block.state == BlockState.SCHEDULED) {
-                    // For scheduled blocks, run schedule check to determine actual state
-                    scheduleManager.processSchedules()
-                } else {
-                    // For always-on blocks, just enable
-                    blockRepository.setBlockEnabled(block.id, true)
-                }
-            }
+            blockRepository.setBlockEnabled(block.id, !block.isEnabled)
         }
     }
 

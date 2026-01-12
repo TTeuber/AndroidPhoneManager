@@ -14,5 +14,6 @@ data class Block(
     val id: Long = 0,
     val name: String,
     val isEnabled: Boolean = false,
-    val state: BlockState = BlockState.ALWAYS_ON
+    val state: BlockState = BlockState.ALWAYS_ON,
+    val isScheduleActive: Boolean = true // For SCHEDULED blocks, tracks if schedule is currently active
 )

@@ -53,6 +53,8 @@ class BlockRepository @Inject constructor(
 
     suspend fun setBlockEnabled(blockId: Long, enabled: Boolean) = blockDao.setEnabled(blockId, enabled)
 
+    suspend fun setScheduleActive(blockId: Long, active: Boolean) = blockDao.setScheduleActive(blockId, active)
+
     // App rule operations
     fun getAppRulesForBlock(blockId: Long): Flow<List<AppRule>> = appRuleDao.getAppRulesForBlock(blockId)
 
