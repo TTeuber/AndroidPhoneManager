@@ -2,6 +2,7 @@ package com.tyler.selfcontrol.ui.screens
 
 import android.app.admin.DevicePolicyManager
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -48,6 +50,7 @@ import com.tyler.selfcontrol.data.model.BlockWithRules
 import com.tyler.selfcontrol.data.model.Lock
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.domain.LockManager
+import com.tyler.selfcontrol.ui.browser.BrowserActivity
 import com.tyler.selfcontrol.ui.viewmodel.MainViewModel
 import java.time.Duration
 import java.time.Instant
@@ -74,6 +77,11 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("Self Control") },
                 actions = {
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, BrowserActivity::class.java))
+                    }) {
+                        Icon(Icons.Default.Search, contentDescription = "Browser")
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }

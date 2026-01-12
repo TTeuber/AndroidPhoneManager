@@ -17,7 +17,14 @@ interface WebsiteRuleDao {
     @Query("SELECT * FROM website_rules WHERE blockId = :blockId")
     suspend fun getWebsiteRulesForBlockOnce(blockId: Long): List<WebsiteRule>
 
-    @Query("SELECT * FROM website_rules WHERE blockId IN (SELECT id FROM blocks WHERE isEnabled = 1)")
+    @Query("""
+        SELECT * FROM website_rules
+        WHERE blockId IN (
+            SELECT id FROM blocks
+            WHERE isEnabled = 1
+            AND (state = 'ALWAYS_ON' OR (state = 'SCHEDULED' AND isScheduleActive = 1))
+        )
+    """)
     fun getActiveWebsiteRules(): Flow<List<WebsiteRule>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -23,6 +23,10 @@
     <!-- Internet for Play Store page fetching -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Camera for QR code scanning -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
         android:name=".SelfControlApplication"
         android:allowBackup="false"
@@ -59,6 +63,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Browser Activity -->
+        <activity
+            android:name=".ui.browser.BrowserActivity"
+            android:exported="false"
+            android:label="@string/browser_title"
+            android:theme="@style/Theme.SelfControl" />
 
         <!-- App Blocking Foreground Service -->
         <service
