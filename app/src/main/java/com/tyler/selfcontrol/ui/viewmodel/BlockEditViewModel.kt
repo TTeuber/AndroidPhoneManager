@@ -254,13 +254,8 @@ class BlockEditViewModel @Inject constructor(
             blockRepository.setBlockState(blockId, state)
 
             when (state) {
-                BlockState.DISABLED -> {
-                    // Disable the block
-                    blockRepository.setBlockEnabled(blockId, false)
-                }
                 BlockState.ALWAYS_ON -> {
-                    // Enable the block permanently
-                    blockRepository.setBlockEnabled(blockId, true)
+                    // Keep current enabled state (user controls via toggle)
                 }
                 BlockState.SCHEDULED -> {
                     // Create default schedule if none exists

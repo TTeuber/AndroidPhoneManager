@@ -259,7 +259,6 @@ private fun BlockCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val stateLabel = when (block.state) {
-        BlockState.DISABLED -> "Off"
         BlockState.ALWAYS_ON -> "Always"
         BlockState.SCHEDULED -> "Scheduled"
     }
@@ -343,14 +342,11 @@ private fun BlockCard(
                         )
                     }
                 }
-                // For scheduled blocks, don't show toggle (controlled by schedule)
-                if (block.state != BlockState.SCHEDULED) {
-                    Switch(
-                        checked = block.isEnabled,
-                        onCheckedChange = { onToggle() },
-                        enabled = !isLocked || !block.isEnabled // Can enable, but can't disable if locked
-                    )
-                }
+                Switch(
+                    checked = block.isEnabled,
+                    onCheckedChange = { onToggle() },
+                    enabled = !isLocked || !block.isEnabled // Can enable, but can't disable if locked
+                )
             }
         }
     }

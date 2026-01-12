@@ -157,8 +157,7 @@ class ScheduleManager @Inject constructor(
         val schedule = scheduleDao.getScheduleForBlock(blockId)
 
         return when (block.state) {
-            BlockState.DISABLED -> "Disabled"
-            BlockState.ALWAYS_ON -> "Always on"
+            BlockState.ALWAYS_ON -> if (block.isEnabled) "Always on" else "Disabled"
             BlockState.SCHEDULED -> {
                 if (schedule == null) {
                     "No schedule set"

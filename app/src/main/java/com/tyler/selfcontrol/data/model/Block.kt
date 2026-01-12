@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 enum class BlockState {
-    DISABLED,
     ALWAYS_ON,
     SCHEDULED
 }
@@ -15,5 +14,5 @@ data class Block(
     val id: Long = 0,
     val name: String,
     val isEnabled: Boolean = false,
-    val state: BlockState = BlockState.DISABLED
+    val state: BlockState = BlockState.ALWAYS_ON
 )

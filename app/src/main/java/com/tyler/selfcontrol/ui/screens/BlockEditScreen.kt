@@ -1049,17 +1049,9 @@ private fun ScheduleCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 SegmentedButton(
-                    selected = block.state == BlockState.DISABLED,
-                    onClick = { if (!isLocked) onStateChange(BlockState.DISABLED) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                    enabled = !isLocked
-                ) {
-                    Text("Off", style = MaterialTheme.typography.labelSmall)
-                }
-                SegmentedButton(
                     selected = block.state == BlockState.ALWAYS_ON,
                     onClick = { if (!isLocked) onStateChange(BlockState.ALWAYS_ON) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     enabled = !isLocked
                 ) {
                     Text("Always", style = MaterialTheme.typography.labelSmall)
@@ -1067,7 +1059,7 @@ private fun ScheduleCard(
                 SegmentedButton(
                     selected = block.state == BlockState.SCHEDULED,
                     onClick = { if (!isLocked) onStateChange(BlockState.SCHEDULED) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     enabled = !isLocked
                 ) {
                     Text("Schedule", style = MaterialTheme.typography.labelSmall)
@@ -1151,15 +1143,9 @@ private fun ScheduleCard(
                 )
             } else if (block.state == BlockState.ALWAYS_ON) {
                 Text(
-                    text = "Block is always active",
+                    text = if (block.isEnabled) "Block is always active when enabled" else "Block is disabled",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else if (block.state == BlockState.DISABLED) {
-                Text(
-                    text = "Block is disabled",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (block.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
