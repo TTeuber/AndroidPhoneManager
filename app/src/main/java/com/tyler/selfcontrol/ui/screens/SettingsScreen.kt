@@ -129,7 +129,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                         Text(
-                            text = "Development features are enabled",
+                            text = "Lock expiry check: every 1 minute (instead of 15 minutes)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )

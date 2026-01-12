@@ -44,8 +44,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tyler.selfcontrol.data.model.BlockWithRules
+import com.tyler.selfcontrol.data.model.Lock
 import com.tyler.selfcontrol.data.model.LockMode
+import com.tyler.selfcontrol.domain.LockManager
 import com.tyler.selfcontrol.ui.viewmodel.MainViewModel
+import java.time.Duration
+import java.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -246,9 +250,10 @@ private fun BlockCard(
 ) {
     val block = blockWithRules.block
     val lock = blockWithRules.lock
-    val isLocked = lock != null && lock.mode != LockMode.UNLOCKED
+    val isLocked = isLockActive(lock)
     val appCount = blockWithRules.appRules.size
     val websiteCount = blockWithRules.websiteRules.size
+    val lockStatusText = getLockStatusText(lock)
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -296,6 +301,14 @@ private fun BlockCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                if (isLocked && lockStatusText.isNotEmpty()) {
+                    Text(
+                        text = lockStatusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -339,5 +352,39 @@ private fun BlockCard(
                 }
             }
         )
+    }
+}
+
+private fun getLockStatusText(lock: Lock?): String {
+    if (lock == null) return ""
+
+    return when (lock.mode) {
+        LockMode.UNLOCKED -> ""
+        LockMode.FOREVER -> "Locked forever"
+        LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
+            val unlockTime = lock.unlockTime
+            if (unlockTime == null || Instant.now().isAfter(unlockTime)) {
+                ""
+            } else {
+                val remaining = Duration.between(Instant.now(), unlockTime)
+                "Unlocks in ${LockManager.formatDuration(remaining)}"
+            }
+        }
+    }
+}
+
+/**
+ * Check if a lock is actually active (not just non-UNLOCKED mode, but also not expired).
+ */
+private fun isLockActive(lock: Lock?): Boolean {
+    if (lock == null) return false
+
+    return when (lock.mode) {
+        LockMode.UNLOCKED -> false
+        LockMode.FOREVER -> true
+        LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
+            val unlockTime = lock.unlockTime
+            unlockTime != null && Instant.now().isBefore(unlockTime)
+        }
     }
 }

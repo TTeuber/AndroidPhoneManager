@@ -8,14 +8,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tyler.selfcontrol.data.model.AppRule
 import com.tyler.selfcontrol.data.model.Block
+import com.tyler.selfcontrol.data.model.Lock
+import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.data.model.WebsiteRule
 import com.tyler.selfcontrol.data.repository.BlockRepository
+import com.tyler.selfcontrol.domain.LockManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 
 data class InstalledApp(
@@ -28,14 +35,18 @@ data class BlockEditUiState(
     val block: Block? = null,
     val appRules: List<AppRule> = emptyList(),
     val websiteRules: List<WebsiteRule> = emptyList(),
+    val lock: Lock? = null,
     val isLocked: Boolean = false,
-    val isLoading: Boolean = true
+    val lockStatusText: String = "Not locked",
+    val isLoading: Boolean = true,
+    val lockError: String? = null
 )
 
 @HiltViewModel
 class BlockEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val blockRepository: BlockRepository,
+    private val lockManager: LockManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -50,24 +61,47 @@ class BlockEditViewModel @Inject constructor(
     init {
         loadBlock()
         loadInstalledApps()
+        startLockStatusUpdater()
     }
 
     private fun loadBlock() {
         viewModelScope.launch {
             val blockWithRules = blockRepository.getBlockWithRulesById(blockId)
             if (blockWithRules != null) {
-                val isLocked = blockRepository.isBlockLocked(blockId)
+                val lock = blockRepository.getLockForBlock(blockId)
+                val isLocked = lockManager.isBlockLocked(blockId)
                 _uiState.value = BlockEditUiState(
                     block = blockWithRules.block,
                     appRules = blockWithRules.appRules,
                     websiteRules = blockWithRules.websiteRules,
+                    lock = lock,
                     isLocked = isLocked,
+                    lockStatusText = lockManager.getLockStatusDescription(lock),
                     isLoading = false
                 )
             } else {
                 _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
+    }
+
+    private fun startLockStatusUpdater() {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(60_000) // Update every minute
+                refreshLockStatus()
+            }
+        }
+    }
+
+    private suspend fun refreshLockStatus() {
+        val lock = blockRepository.getLockForBlock(blockId)
+        val isLocked = lockManager.isBlockLocked(blockId)
+        _uiState.value = _uiState.value.copy(
+            lock = lock,
+            isLocked = isLocked,
+            lockStatusText = lockManager.getLockStatusDescription(lock)
+        )
     }
 
     private fun loadInstalledApps() {
@@ -153,5 +187,47 @@ class BlockEditViewModel @Inject constructor(
         } catch (e: Exception) {
             packageName
         }
+    }
+
+    // Lock operations
+
+    fun lockUntilDateTime(unlockTime: Instant) {
+        viewModelScope.launch {
+            val result = lockManager.lockUntilDateTime(blockId, unlockTime)
+            result.onSuccess {
+                refreshLockStatus()
+                _uiState.value = _uiState.value.copy(lockError = null)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(lockError = e.message)
+            }
+        }
+    }
+
+    fun lockForDuration(duration: Duration) {
+        viewModelScope.launch {
+            val result = lockManager.lockForDuration(blockId, duration)
+            result.onSuccess {
+                refreshLockStatus()
+                _uiState.value = _uiState.value.copy(lockError = null)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(lockError = e.message)
+            }
+        }
+    }
+
+    fun lockForever() {
+        viewModelScope.launch {
+            val result = lockManager.lockForever(blockId)
+            result.onSuccess {
+                refreshLockStatus()
+                _uiState.value = _uiState.value.copy(lockError = null)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(lockError = e.message)
+            }
+        }
+    }
+
+    fun clearLockError() {
+        _uiState.value = _uiState.value.copy(lockError = null)
     }
 }

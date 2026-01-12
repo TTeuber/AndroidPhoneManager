@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tyler.selfcontrol.data.model.Block
 import com.tyler.selfcontrol.data.model.BlockWithRules
 import com.tyler.selfcontrol.data.repository.BlockRepository
+import com.tyler.selfcontrol.domain.LockManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +15,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val blockRepository: BlockRepository
+    private val blockRepository: BlockRepository,
+    private val lockManager: LockManager
 ) : ViewModel() {
 
     val blocks: StateFlow<List<BlockWithRules>> = blockRepository.getAllBlocksWithRules()
@@ -32,8 +34,8 @@ class MainViewModel @Inject constructor(
 
     fun toggleBlockEnabled(block: Block) {
         viewModelScope.launch {
-            // Check if block is locked before allowing disable
-            if (block.isEnabled && blockRepository.isBlockLocked(block.id)) {
+            // Check if block is locked before allowing disable (uses LockManager which checks expiry)
+            if (block.isEnabled && lockManager.isBlockLocked(block.id)) {
                 // Block is locked, cannot disable
                 return@launch
             }
@@ -43,8 +45,8 @@ class MainViewModel @Inject constructor(
 
     fun deleteBlock(blockId: Long) {
         viewModelScope.launch {
-            // Check if block is locked
-            if (blockRepository.isBlockLocked(blockId)) {
+            // Check if block is locked (uses LockManager which checks expiry)
+            if (lockManager.isBlockLocked(blockId)) {
                 return@launch
             }
             blockRepository.deleteBlock(blockId)
