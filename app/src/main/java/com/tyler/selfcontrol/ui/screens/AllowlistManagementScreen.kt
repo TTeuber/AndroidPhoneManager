@@ -1,6 +1,7 @@
 package com.tyler.selfcontrol.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,14 +13,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -27,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -52,7 +58,19 @@ fun AllowlistManagementScreen(
 ) {
     val allowedApps by viewModel.allowedApps.collectAsState()
     val blacklistedApps by viewModel.blacklistedApps.collectAsState()
+    val addToBlacklistState by viewModel.addToBlacklistState.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showAddBlacklistDialog by remember { mutableStateOf(false) }
+    var urlInput by remember { mutableStateOf("") }
+
+    // Close dialog on successful add
+    LaunchedEffect(addToBlacklistState.success) {
+        if (addToBlacklistState.success) {
+            showAddBlacklistDialog = false
+            urlInput = ""
+            viewModel.resetAddToBlacklistState()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -64,6 +82,16 @@ fun AllowlistManagementScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            // Only show FAB on blacklist tab
+            if (selectedTab == 1) {
+                FloatingActionButton(
+                    onClick = { showAddBlacklistDialog = true }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add to Blacklist")
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -89,12 +117,105 @@ fun AllowlistManagementScreen(
                     apps = allowedApps,
                     onRemove = { viewModel.removeFromAllowlist(it) }
                 )
-                1 -> BlacklistedAppsList(
-                    apps = blacklistedApps,
-                    onRemove = { viewModel.removeFromBlacklist(it) }
-                )
+                1 -> BlacklistedAppsList(apps = blacklistedApps)
             }
         }
+    }
+
+    // Add to Blacklist Dialog
+    if (showAddBlacklistDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddBlacklistDialog = false
+                urlInput = ""
+                viewModel.resetAddToBlacklistState()
+            },
+            title = { Text("Add to Blacklist") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
+                        label = { Text("Play Store URL") },
+                        placeholder = { Text("https://play.google.com/store/apps/details?id=...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    when {
+                        addToBlacklistState.isLoading -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        addToBlacklistState.error != null -> {
+                            Text(
+                                text = addToBlacklistState.error!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        addToBlacklistState.parsedApp != null -> {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = addToBlacklistState.parsedApp!!.appName,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = addToBlacklistState.parsedApp!!.packageName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                    )
+                                    Text(
+                                        text = "Category: ${addToBlacklistState.parsedApp!!.category.name}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (addToBlacklistState.parsedApp != null) {
+                    TextButton(
+                        onClick = { viewModel.confirmAddToBlacklist() }
+                    ) {
+                        Text("Add to Blacklist", color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    TextButton(
+                        onClick = { viewModel.parsePlayStoreUrl(urlInput) },
+                        enabled = urlInput.isNotBlank() && !addToBlacklistState.isLoading
+                    ) {
+                        Text("Check URL")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAddBlacklistDialog = false
+                        urlInput = ""
+                        viewModel.resetAddToBlacklistState()
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -118,16 +239,13 @@ private fun AllowedAppsList(
                 AllowedAppCard(app = app, onRemove = { onRemove(app.packageName) })
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+            item { Spacer(modifier = Modifier.height(80.dp)) } // Space for FAB
         }
     }
 }
 
 @Composable
-private fun BlacklistedAppsList(
-    apps: List<BlacklistedApp>,
-    onRemove: (String) -> Unit
-) {
+private fun BlacklistedAppsList(apps: List<BlacklistedApp>) {
     if (apps.isEmpty()) {
         EmptyListCard(text = "No apps on the blacklist")
     } else {
@@ -140,10 +258,10 @@ private fun BlacklistedAppsList(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             items(apps, key = { it.id }) { app ->
-                BlacklistedAppCard(app = app, onRemove = { onRemove(app.packageName) })
+                BlacklistedAppCard(app = app)
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+            item { Spacer(modifier = Modifier.height(80.dp)) } // Space for FAB
         }
     }
 }
@@ -239,72 +357,35 @@ private fun AllowedAppCard(
 }
 
 @Composable
-private fun BlacklistedAppCard(
-    app: BlacklistedApp,
-    onRemove: () -> Unit
-) {
-    var showRemoveDialog by remember { mutableStateOf(false) }
-
+private fun BlacklistedAppCard(app: BlacklistedApp) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = app.appName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = app.packageName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+            )
+            app.reason?.let { reason ->
                 Text(
-                    text = app.appName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-                Text(
-                    text = app.packageName,
+                    text = reason,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
                 )
-                app.reason?.let { reason ->
-                    Text(
-                        text = reason,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
-                    )
-                }
-            }
-            IconButton(onClick = { showRemoveDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
             }
         }
-    }
-
-    if (showRemoveDialog) {
-        AlertDialog(
-            onDismissRequest = { showRemoveDialog = false },
-            title = { Text("Remove from Blacklist") },
-            text = { Text("Remove \"${app.appName}\" from the blacklist? This will allow it to be added to the allowlist.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRemove()
-                    showRemoveDialog = false
-                }) {
-                    Text("Remove")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemoveDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }

@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -38,6 +39,7 @@ class AppInstallationManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
+        private const val TAG = "AppInstallationManager"
         const val PLAY_STORE_PACKAGE = "com.android.vending"
         const val COOLDOWN_WINDOW_START_HOUR = 15  // 3 PM
         const val COOLDOWN_WINDOW_END_HOUR = 18    // 6 PM
@@ -262,10 +264,13 @@ class AppInstallationManager @Inject constructor(
     }
 
     /**
-     * Suspend the Play Store.
+     * Suspend and hide the Play Store.
      */
     fun suspendPlayStore() {
-        if (!isDeviceOwner()) return
+        if (!isDeviceOwner()) {
+            Log.w(TAG, "Cannot suspend Play Store: not device owner")
+            return
+        }
 
         try {
             devicePolicyManager.setPackagesSuspended(
@@ -273,16 +278,24 @@ class AppInstallationManager @Inject constructor(
                 arrayOf(PLAY_STORE_PACKAGE),
                 true
             )
+            Log.d(TAG, "Play Store suspended")
         } catch (e: Exception) {
-            // Log but don't crash
+            Log.e(TAG, "Failed to suspend Play Store", e)
         }
+
+        hidePlayStore()
     }
 
     /**
-     * Unsuspend the Play Store temporarily.
+     * Unsuspend and unhide the Play Store temporarily.
      */
     fun unsuspendPlayStore() {
-        if (!isDeviceOwner()) return
+        if (!isDeviceOwner()) {
+            Log.w(TAG, "Cannot unsuspend Play Store: not device owner")
+            return
+        }
+
+        unhidePlayStore()
 
         try {
             devicePolicyManager.setPackagesSuspended(
@@ -290,8 +303,45 @@ class AppInstallationManager @Inject constructor(
                 arrayOf(PLAY_STORE_PACKAGE),
                 false
             )
+            Log.d(TAG, "Play Store unsuspended")
         } catch (e: Exception) {
-            // Log but don't crash
+            Log.e(TAG, "Failed to unsuspend Play Store", e)
+        }
+    }
+
+    /**
+     * Hide the Play Store from the launcher using setApplicationHidden.
+     */
+    private fun hidePlayStore() {
+        if (!isDeviceOwner()) return
+
+        try {
+            val result = devicePolicyManager.setApplicationHidden(
+                adminComponent,
+                PLAY_STORE_PACKAGE,
+                true
+            )
+            Log.d(TAG, "Play Store hidden: $result")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to hide Play Store", e)
+        }
+    }
+
+    /**
+     * Unhide the Play Store to allow installation.
+     */
+    private fun unhidePlayStore() {
+        if (!isDeviceOwner()) return
+
+        try {
+            val result = devicePolicyManager.setApplicationHidden(
+                adminComponent,
+                PLAY_STORE_PACKAGE,
+                false
+            )
+            Log.d(TAG, "Play Store unhidden: $result")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to unhide Play Store", e)
         }
     }
 

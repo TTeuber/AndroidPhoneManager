@@ -9,13 +9,16 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.tyler.selfcontrol.MainActivity
 import com.tyler.selfcontrol.R
+import com.tyler.selfcontrol.data.repository.AppInstallationRepository
 import com.tyler.selfcontrol.data.repository.BlockRepository
 import com.tyler.selfcontrol.receiver.SelfControlDeviceAdminReceiver
 import com.tyler.selfcontrol.util.UsageStatsHelper
@@ -33,6 +36,9 @@ import javax.inject.Inject
 class AppBlockingService : Service() {
 
     @Inject
+    lateinit var appInstallationRepository: AppInstallationRepository
+
+    @Inject
     lateinit var blockRepository: BlockRepository
 
     @Inject
@@ -43,6 +49,9 @@ class AppBlockingService : Service() {
     private var monitoringJob: Job? = null
 
     private var blockedPackages = setOf<String>()
+    private var allowedPackages = setOf<String>()
+    private var blockRulePackages = setOf<String>() // Packages from user-defined blocks
+    private var blacklistedPackages = setOf<String>() // Packages on the blacklist
     private var isMonitoring = false
 
     private val devicePolicyManager: DevicePolicyManager by lazy {
@@ -66,7 +75,9 @@ class AppBlockingService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
-        observeBlockedPackages()
+        observeAllowedPackages()
+        observeBlockRulePackages()
+        observeBlacklistedPackages()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -86,27 +97,122 @@ class AppBlockingService : Service() {
         super.onDestroy()
     }
 
-    private fun observeBlockedPackages() {
+    /**
+     * Observe the allowlist and recalculate blocked packages when it changes.
+     */
+    private fun observeAllowedPackages() {
         serviceScope.launch {
-            blockRepository.getBlockedPackageNames().collectLatest { packages ->
-                val newBlockedPackages = packages.toSet()
-                val previouslyBlocked = blockedPackages
-
-                blockedPackages = newBlockedPackages
-
-                // Unsuspend apps that are no longer blocked
-                val toUnsuspend = previouslyBlocked - newBlockedPackages
-                if (toUnsuspend.isNotEmpty()) {
-                    setPackagesSuspended(toUnsuspend.toTypedArray(), false)
-                }
-
-                // Suspend newly blocked apps
-                val toSuspend = newBlockedPackages - previouslyBlocked
-                if (toSuspend.isNotEmpty()) {
-                    setPackagesSuspended(toSuspend.toTypedArray(), true)
-                }
+            appInstallationRepository.getAllowedPackageNamesFlow().collectLatest { allowed ->
+                allowedPackages = allowed
+                Log.d(TAG, "Allowlist updated: ${allowed.size} packages")
+                recalculateBlockedPackages()
             }
         }
+    }
+
+    /**
+     * Observe the block rules (user-defined blocks with app rules) and recalculate when they change.
+     */
+    private fun observeBlockRulePackages() {
+        serviceScope.launch {
+            blockRepository.getBlockedPackageNames().collectLatest { blocked ->
+                blockRulePackages = blocked.toSet()
+                Log.d(TAG, "Block rules updated: ${blocked.size} packages: $blocked")
+                recalculateBlockedPackages()
+            }
+        }
+    }
+
+    /**
+     * Observe the blacklist and recalculate when it changes.
+     * Blacklisted apps should ALWAYS be blocked, even if they're system apps.
+     */
+    private fun observeBlacklistedPackages() {
+        serviceScope.launch {
+            appInstallationRepository.getBlacklistedApps().collectLatest { apps ->
+                blacklistedPackages = apps.map { it.packageName }.toSet()
+                Log.d(TAG, "Blacklist updated: ${blacklistedPackages.size} packages")
+                recalculateBlockedPackages()
+            }
+        }
+    }
+
+    /**
+     * Recalculate which packages should be blocked based on:
+     * 1. Packages explicitly blocked by user-defined blocks (blockRulePackages)
+     * 2. Packages on the blacklist (blacklistedPackages) - blocked regardless of system status
+     * 3. Packages not on the allowlist (and not system packages)
+     *
+     * The final set is the UNION of all sources.
+     */
+    private fun recalculateBlockedPackages() {
+        val allInstalledPackages = getInstalledPackages()
+
+        // Source 1: Packages from user-defined blocks (original Phase 3-5 functionality)
+        // These override system package status - if user explicitly blocks it, block it
+        val fromBlockRules = blockRulePackages.filter { pkg ->
+            pkg != packageName
+        }.toSet()
+
+        // Source 2: Packages on the blacklist - ALWAYS blocked regardless of system status
+        val fromBlacklist = blacklistedPackages.filter { pkg ->
+            pkg != packageName && allInstalledPackages.contains(pkg)
+        }.toSet()
+
+        // Source 3: Packages not on allowlist (Phase 7 allowlist-based blocking)
+        // Only applies to non-system packages
+        val notOnAllowlist = allInstalledPackages.filter { pkg ->
+            !isSystemPackage(pkg) &&
+            !allowedPackages.contains(pkg) &&
+            pkg != packageName
+        }.toSet()
+
+        // Combine all sources
+        val newBlockedPackages = fromBlockRules + fromBlacklist + notOnAllowlist
+
+        val previouslyBlocked = blockedPackages
+        blockedPackages = newBlockedPackages
+
+        Log.d(TAG, "Recalculating blocks - Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}, Total: ${newBlockedPackages.size}")
+
+        // Unsuspend apps that are no longer blocked
+        val toUnsuspend = previouslyBlocked - newBlockedPackages
+        if (toUnsuspend.isNotEmpty()) {
+            Log.d(TAG, "Unsuspending ${toUnsuspend.size} apps: ${toUnsuspend.take(5)}")
+            setPackagesSuspended(toUnsuspend.toTypedArray(), false)
+        }
+
+        // Suspend newly blocked apps
+        val toSuspend = newBlockedPackages - previouslyBlocked
+        if (toSuspend.isNotEmpty()) {
+            Log.d(TAG, "Suspending ${toSuspend.size} apps: ${toSuspend.take(5)}")
+            setPackagesSuspended(toSuspend.toTypedArray(), true)
+        }
+    }
+
+    /**
+     * Get all installed package names on the device.
+     */
+    private fun getInstalledPackages(): Set<String> {
+        return try {
+            packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                .map { it.packageName }
+                .toSet()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get installed packages", e)
+            emptySet()
+        }
+    }
+
+    /**
+     * Check if a package is a system package that should never be blocked.
+     * Includes com.android*, com.google*, android*
+     */
+    private fun isSystemPackage(packageName: String): Boolean {
+        return packageName.startsWith("com.android") ||
+               packageName.startsWith("com.google") ||
+               packageName.startsWith("android") ||
+               isSystemCriticalPackage(packageName)
     }
 
     private fun startMonitoring() {
@@ -125,9 +231,8 @@ class AppBlockingService : Service() {
     }
 
     private fun updateSuspendedApps() {
-        if (blockedPackages.isNotEmpty()) {
-            setPackagesSuspended(blockedPackages.toTypedArray(), true)
-        }
+        // Recalculate and apply blocks
+        recalculateBlockedPackages()
     }
 
     private fun checkAndBlockForegroundApp() {
@@ -145,7 +250,10 @@ class AppBlockingService : Service() {
     }
 
     private fun setPackagesSuspended(packages: Array<String>, suspended: Boolean) {
-        if (!isDeviceOwner()) return
+        if (!isDeviceOwner()) {
+            Log.w(TAG, "Cannot suspend packages: not device owner")
+            return
+        }
 
         try {
             // Filter out system-critical packages and our own app
@@ -154,14 +262,20 @@ class AppBlockingService : Service() {
             }.toTypedArray()
 
             if (filteredPackages.isNotEmpty()) {
-                devicePolicyManager.setPackagesSuspended(
+                Log.d(TAG, "Calling setPackagesSuspended(suspended=$suspended) for: ${filteredPackages.toList()}")
+                val failedPackages = devicePolicyManager.setPackagesSuspended(
                     adminComponent,
                     filteredPackages,
                     suspended
                 )
+                if (failedPackages.isNotEmpty()) {
+                    Log.w(TAG, "Failed to suspend these packages: ${failedPackages.toList()}")
+                } else {
+                    Log.d(TAG, "Successfully ${if (suspended) "suspended" else "unsuspended"} ${filteredPackages.size} packages")
+                }
             }
         } catch (e: Exception) {
-            // Log but don't crash - some packages may not be suspendable
+            Log.e(TAG, "Failed to set packages suspended: $suspended", e)
         }
     }
 
@@ -170,7 +284,7 @@ class AppBlockingService : Service() {
     }
 
     private fun isSystemCriticalPackage(packageName: String): Boolean {
-        // Packages that should never be suspended
+        // Packages that should never be suspended regardless of other rules
         val criticalPackages = setOf(
             "com.android.systemui",
             "com.android.settings",
@@ -241,6 +355,7 @@ class AppBlockingService : Service() {
     }
 
     companion object {
+        private const val TAG = "AppBlockingService"
         private const val CHANNEL_ID = "app_blocking_channel"
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 1000L // Check every second

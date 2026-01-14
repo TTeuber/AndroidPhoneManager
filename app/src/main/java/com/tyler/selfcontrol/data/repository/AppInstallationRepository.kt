@@ -9,6 +9,7 @@ import com.tyler.selfcontrol.data.model.BlacklistedApp
 import com.tyler.selfcontrol.data.model.CooldownRequest
 import com.tyler.selfcontrol.data.model.CooldownStatus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +26,12 @@ class AppInstallationRepository @Inject constructor(
     suspend fun getAllowedAppsOnce(): List<AllowedApp> = allowedAppDao.getAllAllowedAppsOnce()
 
     suspend fun getAllowedPackageNames(): List<String> = allowedAppDao.getAllowedPackageNames()
+
+    /**
+     * Get allowed package names as a Flow for reactive updates.
+     */
+    fun getAllowedPackageNamesFlow(): Flow<Set<String>> =
+        allowedAppDao.getAllAllowedApps().map { apps -> apps.map { it.packageName }.toSet() }
 
     suspend fun isAllowed(packageName: String): Boolean = allowedAppDao.isAllowed(packageName)
 

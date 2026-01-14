@@ -3,8 +3,8 @@ package com.tyler.selfcontrol.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.work.WorkManager
 import com.tyler.selfcontrol.domain.AppInstallationManager
+import com.tyler.selfcontrol.service.AppBlockingService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -36,6 +36,10 @@ class PackageChangeReceiver : BroadcastReceiver() {
         // Re-suspend Play Store immediately after any package installation
         // This ensures the Play Store is locked down again
         appInstallationManager.resuspendPlayStoreNow()
+
+        // Trigger the blocking service to re-evaluate which packages to block
+        // This will block the newly installed app if it's not on the allowlist
+        AppBlockingService.updateBlocks(context)
     }
 
     private fun handlePackageRemoved(context: Context, packageName: String) {
