@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tyler.selfcontrol.data.datastore.SettingsDataStore
+import com.tyler.selfcontrol.worker.CooldownExpirationWorker
+import com.tyler.selfcontrol.worker.CooldownNotificationWorker
 import com.tyler.selfcontrol.worker.ScheduleWorker
 import com.tyler.selfcontrol.worker.UnlockWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +28,8 @@ class SettingsViewModel @Inject constructor(
             // Reschedule workers with appropriate interval
             UnlockWorker.schedule(context, devMode = enabled)
             ScheduleWorker.schedule(context, devMode = enabled)
+            CooldownNotificationWorker.schedule(context, devMode = enabled)
+            CooldownExpirationWorker.schedule(context, devMode = enabled)
         }
     }
 }

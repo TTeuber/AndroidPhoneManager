@@ -7,6 +7,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.tyler.selfcontrol.ui.screens.AllowlistManagementScreen
+import com.tyler.selfcontrol.ui.screens.AppInstallationScreen
 import com.tyler.selfcontrol.ui.screens.BlockEditScreen
 import com.tyler.selfcontrol.ui.screens.MainScreen
 import com.tyler.selfcontrol.ui.screens.SettingsScreen
@@ -28,6 +30,12 @@ fun AppNavHost(
                 },
                 onNavigateToBlockEdit = { blockId ->
                     navController.navigate(NavRoutes.BlockEdit.createRoute(blockId))
+                },
+                onNavigateToAppInstallation = {
+                    navController.navigate(NavRoutes.AppInstallation.route)
+                },
+                onNavigateToAllowlist = {
+                    navController.navigate(NavRoutes.AllowlistManagement.route)
                 }
             )
         }
@@ -45,6 +53,20 @@ fun AppNavHost(
             )
         ) {
             BlockEditScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable(NavRoutes.AppInstallation.route) {
+            AppInstallationScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable(NavRoutes.AllowlistManagement.route) {
+            AllowlistManagementScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -90,6 +90,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Package Change Receiver to detect app installations -->
+        <receiver
+            android:name=".receiver.PackageChangeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <action android:name="android.intent.action.PACKAGE_FULLY_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
         <!-- Disable default WorkManager initialization (using custom Hilt initialization) -->
         <provider
             android:name="androidx.startup.InitializationProvider"

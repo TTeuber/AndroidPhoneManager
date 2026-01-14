@@ -17,9 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -60,6 +62,8 @@ import java.time.Instant
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToBlockEdit: (Long) -> Unit,
+    onNavigateToAppInstallation: () -> Unit,
+    onNavigateToAllowlist: () -> Unit,
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -81,6 +85,12 @@ fun MainScreen(
                         context.startActivity(Intent(context, BrowserActivity::class.java))
                     }) {
                         Icon(Icons.Default.Search, contentDescription = "Browser")
+                    }
+                    IconButton(onClick = onNavigateToAppInstallation) {
+                        Icon(Icons.Default.ShoppingCart, contentDescription = "Add App")
+                    }
+                    IconButton(onClick = onNavigateToAllowlist) {
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "App Lists")
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")

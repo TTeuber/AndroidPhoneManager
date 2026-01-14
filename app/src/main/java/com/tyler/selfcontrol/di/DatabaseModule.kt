@@ -2,8 +2,11 @@ package com.tyler.selfcontrol.di
 
 import android.content.Context
 import androidx.room.Room
+import com.tyler.selfcontrol.data.dao.AllowedAppDao
 import com.tyler.selfcontrol.data.dao.AppRuleDao
+import com.tyler.selfcontrol.data.dao.BlacklistedAppDao
 import com.tyler.selfcontrol.data.dao.BlockDao
+import com.tyler.selfcontrol.data.dao.CooldownRequestDao
 import com.tyler.selfcontrol.data.dao.LockDao
 import com.tyler.selfcontrol.data.dao.ScheduleDao
 import com.tyler.selfcontrol.data.dao.WebsiteRuleDao
@@ -54,5 +57,20 @@ object DatabaseModule {
     @Provides
     fun provideScheduleDao(database: SelfControlDatabase): ScheduleDao {
         return database.scheduleDao()
+    }
+
+    @Provides
+    fun provideAllowedAppDao(database: SelfControlDatabase): AllowedAppDao {
+        return database.allowedAppDao()
+    }
+
+    @Provides
+    fun provideBlacklistedAppDao(database: SelfControlDatabase): BlacklistedAppDao {
+        return database.blacklistedAppDao()
+    }
+
+    @Provides
+    fun provideCooldownRequestDao(database: SelfControlDatabase): CooldownRequestDao {
+        return database.cooldownRequestDao()
     }
 }
