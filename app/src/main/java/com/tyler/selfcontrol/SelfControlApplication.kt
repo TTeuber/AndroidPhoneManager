@@ -5,7 +5,6 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.tyler.selfcontrol.data.datastore.SettingsDataStore
 import com.tyler.selfcontrol.data.repository.AppInstallationRepository
-import com.tyler.selfcontrol.domain.AppInstallationManager
 import com.tyler.selfcontrol.worker.CooldownExpirationWorker
 import com.tyler.selfcontrol.worker.CooldownNotificationWorker
 import com.tyler.selfcontrol.worker.ScheduleWorker
@@ -26,9 +25,6 @@ class SelfControlApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var settingsDataStore: SettingsDataStore
-
-    @Inject
-    lateinit var appInstallationManager: AppInstallationManager
 
     @Inject
     lateinit var appInstallationRepository: AppInstallationRepository
@@ -53,9 +49,6 @@ class SelfControlApplication : Application(), Configuration.Provider {
             // Schedule cooldown workers
             CooldownNotificationWorker.schedule(this@SelfControlApplication, devMode)
             CooldownExpirationWorker.schedule(this@SelfControlApplication, devMode)
-
-            // Suspend Play Store on startup (if device owner)
-            appInstallationManager.suspendPlayStore()
 
             // Initialize blacklist with default entries if empty
             initializeBlacklistIfNeeded()

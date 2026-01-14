@@ -214,9 +214,8 @@ class AppBlockingService : Service() {
 
                 Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}")
 
-                // Combine all sources, but NEVER include Play Store
-                // Play Store visibility is managed separately by AppInstallationManager
-                (fromBlockRules + fromBlacklist + notOnAllowlist) - PLAY_STORE_PACKAGE
+                // Combine all sources
+                fromBlockRules + fromBlacklist + notOnAllowlist
             }.collectLatest { newBlockedPackages ->
                 val previouslyBlocked = blockedPackages
                 blockedPackages = newBlockedPackages
@@ -229,11 +228,6 @@ class AppBlockingService : Service() {
                     Log.d(TAG, "YouTube IS in blocked packages")
                 } else {
                     Log.w(TAG, "YouTube is NOT in blocked packages")
-                }
-
-                // Debug: Check if Play Store is in blocked packages (it shouldn't be)
-                if (PLAY_STORE_PACKAGE in newBlockedPackages) {
-                    Log.e(TAG, "WARNING: Play Store IS in blocked packages - this shouldn't happen!")
                 }
 
                 // Unsuspend apps that are no longer blocked
@@ -337,14 +331,6 @@ class AppBlockingService : Service() {
                 pkg != packageName && !isSystemCriticalPackage(pkg)
             }.toTypedArray()
 
-            // Debug: Check if Play Store is in the list
-            if (packages.contains(PLAY_STORE_PACKAGE)) {
-                Log.d(TAG, "Play Store ($PLAY_STORE_PACKAGE) is in packages to ${if (suspended) "suspend" else "unsuspend"}")
-                if (!filteredPackages.contains(PLAY_STORE_PACKAGE)) {
-                    Log.w(TAG, "Play Store was FILTERED OUT by isSystemCriticalPackage check!")
-                }
-            }
-
             if (filteredPackages.isNotEmpty()) {
                 Log.d(TAG, "Calling setPackagesSuspended(suspended=$suspended) for ${filteredPackages.size} packages")
                 val failedPackages = devicePolicyManager.setPackagesSuspended(
@@ -357,14 +343,6 @@ class AppBlockingService : Service() {
                     // Track failed packages for retry (only when suspending)
                     if (suspended) {
                         packagesNeedingRetry = packagesNeedingRetry + failedPackages.toSet()
-                    }
-                    // Specifically check for Play Store failure - use setApplicationHidden as fallback
-                    if (PLAY_STORE_PACKAGE in failedPackages && suspended) {
-                        Log.d(TAG, "Attempting to hide Play Store using setApplicationHidden")
-                        hidePlayStore()
-                    } else if (PLAY_STORE_PACKAGE in failedPackages && !suspended) {
-                        Log.d(TAG, "Attempting to unhide Play Store using setApplicationHidden")
-                        unhidePlayStore()
                     }
                 } else {
                     Log.d(TAG, "Successfully ${if (suspended) "suspended" else "unsuspended"} ${filteredPackages.size} packages")
@@ -415,50 +393,9 @@ class AppBlockingService : Service() {
             } else {
                 Log.w(TAG, "Retry partially failed: ${failedPackages.toList()} still unsuspended")
                 packagesNeedingRetry = failedPackages.toSet()
-
-                // Handle Play Store specially
-                if (PLAY_STORE_PACKAGE in failedPackages) {
-                    hidePlayStore()
-                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Retry suspension failed with exception", e)
-        }
-    }
-
-    /**
-     * Hide the Play Store from the launcher using setApplicationHidden.
-     * This is a fallback when setPackagesSuspended fails for Play Store.
-     */
-    private fun hidePlayStore() {
-        try {
-            val result = devicePolicyManager.setApplicationHidden(
-                adminComponent,
-                PLAY_STORE_PACKAGE,
-                true
-            )
-            Log.d(TAG, "setApplicationHidden(hidden=true) returned: $result")
-            if (!result) {
-                Log.e(TAG, "Failed to hide Play Store - system may protect this package")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception hiding Play Store", e)
-        }
-    }
-
-    /**
-     * Unhide the Play Store from the launcher.
-     */
-    private fun unhidePlayStore() {
-        try {
-            val result = devicePolicyManager.setApplicationHidden(
-                adminComponent,
-                PLAY_STORE_PACKAGE,
-                false
-            )
-            Log.d(TAG, "setApplicationHidden(hidden=false) returned: $result")
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception unhiding Play Store", e)
         }
     }
 
@@ -543,7 +480,6 @@ class AppBlockingService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 1000L // Check every second
         private const val RETRY_INTERVAL_MS = 5000L // Retry failed suspensions every 5 seconds
-        private const val PLAY_STORE_PACKAGE = "com.android.vending"
 
         const val ACTION_START_MONITORING = "com.tyler.selfcontrol.START_MONITORING"
         const val ACTION_STOP_MONITORING = "com.tyler.selfcontrol.STOP_MONITORING"

@@ -4,25 +4,18 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.tyler.selfcontrol.domain.AppInstallationManager
 import com.tyler.selfcontrol.service.AppBlockingService
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 
 /**
  * Receiver that detects package installations and removals.
- * When a package is installed, it immediately re-suspends the Play Store
- * and cancels any pending resuspension work.
+ * When a package is installed, it triggers the blocking service to re-evaluate
+ * which packages should be blocked.
  */
-@AndroidEntryPoint
 class PackageChangeReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "PackageChangeReceiver"
     }
-
-    @Inject
-    lateinit var appInstallationManager: AppInstallationManager
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "onReceive: action=${intent.action}, data=${intent.data}")
@@ -47,10 +40,6 @@ class PackageChangeReceiver : BroadcastReceiver() {
 
     private fun handlePackageInstalled(context: Context, packageName: String) {
         Log.d(TAG, "handlePackageInstalled: $packageName")
-
-        // Re-suspend Play Store immediately after any package installation
-        // This ensures the Play Store is locked down again
-        appInstallationManager.resuspendPlayStoreNow()
 
         // Trigger the blocking service to re-evaluate which packages to block
         // This will block the newly installed app if it's not on the allowlist
