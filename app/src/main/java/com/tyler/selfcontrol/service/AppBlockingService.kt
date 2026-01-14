@@ -28,7 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -49,10 +52,10 @@ class AppBlockingService : Service() {
     private var monitoringJob: Job? = null
 
     private var blockedPackages = setOf<String>()
-    private var allowedPackages = setOf<String>()
-    private var blockRulePackages = setOf<String>() // Packages from user-defined blocks
-    private var blacklistedPackages = setOf<String>() // Packages on the blacklist
     private var isMonitoring = false
+
+    // Flow to trigger recalculation when installed packages change
+    private val installedPackagesFlow = MutableStateFlow<Set<String>>(emptySet())
 
     private val devicePolicyManager: DevicePolicyManager by lazy {
         getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -75,16 +78,25 @@ class AppBlockingService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
-        observeAllowedPackages()
-        observeBlockRulePackages()
-        observeBlacklistedPackages()
+        // Initialize installed packages flow
+        installedPackagesFlow.value = getInstalledPackages()
+        observeBlockedPackages()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START_MONITORING -> startMonitoring()
             ACTION_STOP_MONITORING -> stopMonitoring()
-            ACTION_UPDATE_BLOCKS -> updateSuspendedApps()
+            ACTION_UPDATE_BLOCKS -> {
+                // Refresh installed packages to trigger recalculation
+                Log.d(TAG, "ACTION_UPDATE_BLOCKS received, refreshing installed packages")
+                // Add a small delay to ensure the system has registered the new package
+                serviceScope.launch {
+                    delay(500) // Give system time to register the package
+                    installedPackagesFlow.value = getInstalledPackages()
+                    updateSuspendedApps()
+                }
+            }
         }
         return START_STICKY
     }
@@ -98,95 +110,76 @@ class AppBlockingService : Service() {
     }
 
     /**
-     * Observe the allowlist and recalculate blocked packages when it changes.
-     */
-    private fun observeAllowedPackages() {
-        serviceScope.launch {
-            appInstallationRepository.getAllowedPackageNamesFlow().collectLatest { allowed ->
-                allowedPackages = allowed
-                Log.d(TAG, "Allowlist updated: ${allowed.size} packages")
-                recalculateBlockedPackages()
-            }
-        }
-    }
-
-    /**
-     * Observe the block rules (user-defined blocks with app rules) and recalculate when they change.
-     */
-    private fun observeBlockRulePackages() {
-        serviceScope.launch {
-            blockRepository.getBlockedPackageNames().collectLatest { blocked ->
-                blockRulePackages = blocked.toSet()
-                Log.d(TAG, "Block rules updated: ${blocked.size} packages: $blocked")
-                recalculateBlockedPackages()
-            }
-        }
-    }
-
-    /**
-     * Observe the blacklist and recalculate when it changes.
-     * Blacklisted apps should ALWAYS be blocked, even if they're system apps.
-     */
-    private fun observeBlacklistedPackages() {
-        serviceScope.launch {
-            appInstallationRepository.getBlacklistedApps().collectLatest { apps ->
-                blacklistedPackages = apps.map { it.packageName }.toSet()
-                Log.d(TAG, "Blacklist updated: ${blacklistedPackages.size} packages")
-                recalculateBlockedPackages()
-            }
-        }
-    }
-
-    /**
-     * Recalculate which packages should be blocked based on:
-     * 1. Packages explicitly blocked by user-defined blocks (blockRulePackages)
-     * 2. Packages on the blacklist (blacklistedPackages) - blocked regardless of system status
-     * 3. Packages not on the allowlist (and not system packages)
+     * Observe all sources of blocked packages and combine them.
+     * Uses the same pattern as the original working code.
      *
-     * The final set is the UNION of all sources.
+     * Note: installedPackagesFlow is included to trigger recalculation when
+     * new packages are installed (via PackageChangeReceiver -> ACTION_UPDATE_BLOCKS).
      */
-    private fun recalculateBlockedPackages() {
-        val allInstalledPackages = getInstalledPackages()
+    private fun observeBlockedPackages() {
+        serviceScope.launch {
+            // Combine all four sources of blocking info
+            combine(
+                blockRepository.getBlockedPackageNames(),
+                appInstallationRepository.getBlacklistedApps(),
+                appInstallationRepository.getAllowedPackageNamesFlow(),
+                installedPackagesFlow
+            ) { blockRulePackages, blacklistedApps, allowedPackages, allInstalledPackages ->
+                // Calculate all packages that should be blocked
 
-        // Source 1: Packages from user-defined blocks (original Phase 3-5 functionality)
-        // These override system package status - if user explicitly blocks it, block it
-        val fromBlockRules = blockRulePackages.filter { pkg ->
-            pkg != packageName
-        }.toSet()
+                // Source 1: Packages from user-defined blocks (original Phase 3-5 functionality)
+                val fromBlockRules = blockRulePackages.filter { pkg ->
+                    pkg != packageName
+                }.toSet()
 
-        // Source 2: Packages on the blacklist - ALWAYS blocked regardless of system status
-        val fromBlacklist = blacklistedPackages.filter { pkg ->
-            pkg != packageName && allInstalledPackages.contains(pkg)
-        }.toSet()
+                // Source 2: Packages on the blacklist - blocked regardless of system status
+                val blacklistedPackageNames = blacklistedApps.map { it.packageName }.toSet()
+                Log.d(TAG, "Blacklist DB contains: $blacklistedPackageNames")
+                val fromBlacklist = blacklistedPackageNames.filter { pkg ->
+                    pkg != packageName && allInstalledPackages.contains(pkg)
+                }.toSet()
+                Log.d(TAG, "Blacklisted apps that are installed: $fromBlacklist")
 
-        // Source 3: Packages not on allowlist (Phase 7 allowlist-based blocking)
-        // Only applies to non-system packages
-        val notOnAllowlist = allInstalledPackages.filter { pkg ->
-            !isSystemPackage(pkg) &&
-            !allowedPackages.contains(pkg) &&
-            pkg != packageName
-        }.toSet()
+                // Source 3: Packages not on allowlist (only non-system packages)
+                val notOnAllowlist = allInstalledPackages.filter { pkg ->
+                    !isSystemPackage(pkg) &&
+                    !allowedPackages.contains(pkg) &&
+                    pkg != packageName
+                }.toSet()
 
-        // Combine all sources
-        val newBlockedPackages = fromBlockRules + fromBlacklist + notOnAllowlist
+                Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}")
 
-        val previouslyBlocked = blockedPackages
-        blockedPackages = newBlockedPackages
+                // Combine all sources
+                fromBlockRules + fromBlacklist + notOnAllowlist
+            }.collectLatest { newBlockedPackages ->
+                val previouslyBlocked = blockedPackages
+                blockedPackages = newBlockedPackages
 
-        Log.d(TAG, "Recalculating blocks - Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}, Total: ${newBlockedPackages.size}")
+                Log.d(TAG, "Total blocked packages: ${newBlockedPackages.size}")
 
-        // Unsuspend apps that are no longer blocked
-        val toUnsuspend = previouslyBlocked - newBlockedPackages
-        if (toUnsuspend.isNotEmpty()) {
-            Log.d(TAG, "Unsuspending ${toUnsuspend.size} apps: ${toUnsuspend.take(5)}")
-            setPackagesSuspended(toUnsuspend.toTypedArray(), false)
-        }
+                // Debug: Check specifically for YouTube
+                val youtubePackage = "com.google.android.youtube"
+                if (youtubePackage in newBlockedPackages) {
+                    Log.d(TAG, "YouTube IS in blocked packages")
+                } else {
+                    Log.w(TAG, "YouTube is NOT in blocked packages")
+                }
 
-        // Suspend newly blocked apps
-        val toSuspend = newBlockedPackages - previouslyBlocked
-        if (toSuspend.isNotEmpty()) {
-            Log.d(TAG, "Suspending ${toSuspend.size} apps: ${toSuspend.take(5)}")
-            setPackagesSuspended(toSuspend.toTypedArray(), true)
+                // Unsuspend apps that are no longer blocked
+                val toUnsuspend = previouslyBlocked - newBlockedPackages
+                if (toUnsuspend.isNotEmpty()) {
+                    Log.d(TAG, "Unsuspending ${toUnsuspend.size} apps")
+                    setPackagesSuspended(toUnsuspend.toTypedArray(), false)
+                }
+
+                // Always suspend ALL blocked packages, not just new ones
+                // This handles the case where packages were added to blockedPackages
+                // but failed to suspend (e.g., device owner wasn't set at the time)
+                if (newBlockedPackages.isNotEmpty()) {
+                    Log.d(TAG, "Ensuring all ${newBlockedPackages.size} blocked packages are suspended")
+                    setPackagesSuspended(newBlockedPackages.toTypedArray(), true)
+                }
+            }
         }
     }
 
@@ -231,8 +224,15 @@ class AppBlockingService : Service() {
     }
 
     private fun updateSuspendedApps() {
-        // Recalculate and apply blocks
-        recalculateBlockedPackages()
+        // Re-apply ALL current blocks (not just new ones)
+        // This ensures packages get suspended even if they were in blockedPackages
+        // but failed to suspend earlier (e.g., device owner wasn't set)
+        if (blockedPackages.isNotEmpty()) {
+            Log.d(TAG, "updateSuspendedApps: Force re-suspending ALL ${blockedPackages.size} blocked packages")
+            setPackagesSuspended(blockedPackages.toTypedArray(), true)
+        } else {
+            Log.d(TAG, "updateSuspendedApps: No blocked packages to suspend")
+        }
     }
 
     private fun checkAndBlockForegroundApp() {
@@ -251,7 +251,8 @@ class AppBlockingService : Service() {
 
     private fun setPackagesSuspended(packages: Array<String>, suspended: Boolean) {
         if (!isDeviceOwner()) {
-            Log.w(TAG, "Cannot suspend packages: not device owner")
+            Log.e(TAG, "CRITICAL: Cannot suspend packages - app is NOT device owner!")
+            Log.e(TAG, "Run: adb shell dpm set-device-owner com.tyler.selfcontrol/.receiver.SelfControlDeviceAdminReceiver")
             return
         }
 
@@ -261,21 +262,73 @@ class AppBlockingService : Service() {
                 pkg != packageName && !isSystemCriticalPackage(pkg)
             }.toTypedArray()
 
+            // Debug: Check if Play Store is in the list
+            if (packages.contains(PLAY_STORE_PACKAGE)) {
+                Log.d(TAG, "Play Store ($PLAY_STORE_PACKAGE) is in packages to ${if (suspended) "suspend" else "unsuspend"}")
+                if (!filteredPackages.contains(PLAY_STORE_PACKAGE)) {
+                    Log.w(TAG, "Play Store was FILTERED OUT by isSystemCriticalPackage check!")
+                }
+            }
+
             if (filteredPackages.isNotEmpty()) {
-                Log.d(TAG, "Calling setPackagesSuspended(suspended=$suspended) for: ${filteredPackages.toList()}")
+                Log.d(TAG, "Calling setPackagesSuspended(suspended=$suspended) for ${filteredPackages.size} packages")
                 val failedPackages = devicePolicyManager.setPackagesSuspended(
                     adminComponent,
                     filteredPackages,
                     suspended
                 )
                 if (failedPackages.isNotEmpty()) {
-                    Log.w(TAG, "Failed to suspend these packages: ${failedPackages.toList()}")
+                    Log.w(TAG, "Failed to ${if (suspended) "suspend" else "unsuspend"} these packages: ${failedPackages.toList()}")
+                    // Specifically check for Play Store failure - use setApplicationHidden as fallback
+                    if (PLAY_STORE_PACKAGE in failedPackages && suspended) {
+                        Log.d(TAG, "Attempting to hide Play Store using setApplicationHidden")
+                        hidePlayStore()
+                    } else if (PLAY_STORE_PACKAGE in failedPackages && !suspended) {
+                        Log.d(TAG, "Attempting to unhide Play Store using setApplicationHidden")
+                        unhidePlayStore()
+                    }
                 } else {
                     Log.d(TAG, "Successfully ${if (suspended) "suspended" else "unsuspended"} ${filteredPackages.size} packages")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set packages suspended: $suspended", e)
+        }
+    }
+
+    /**
+     * Hide the Play Store from the launcher using setApplicationHidden.
+     * This is a fallback when setPackagesSuspended fails for Play Store.
+     */
+    private fun hidePlayStore() {
+        try {
+            val result = devicePolicyManager.setApplicationHidden(
+                adminComponent,
+                PLAY_STORE_PACKAGE,
+                true
+            )
+            Log.d(TAG, "setApplicationHidden(hidden=true) returned: $result")
+            if (!result) {
+                Log.e(TAG, "Failed to hide Play Store - system may protect this package")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception hiding Play Store", e)
+        }
+    }
+
+    /**
+     * Unhide the Play Store from the launcher.
+     */
+    private fun unhidePlayStore() {
+        try {
+            val result = devicePolicyManager.setApplicationHidden(
+                adminComponent,
+                PLAY_STORE_PACKAGE,
+                false
+            )
+            Log.d(TAG, "setApplicationHidden(hidden=false) returned: $result")
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception unhiding Play Store", e)
         }
     }
 
@@ -359,6 +412,7 @@ class AppBlockingService : Service() {
         private const val CHANNEL_ID = "app_blocking_channel"
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 1000L // Check every second
+        private const val PLAY_STORE_PACKAGE = "com.android.vending"
 
         const val ACTION_START_MONITORING = "com.tyler.selfcontrol.START_MONITORING"
         const val ACTION_STOP_MONITORING = "com.tyler.selfcontrol.STOP_MONITORING"

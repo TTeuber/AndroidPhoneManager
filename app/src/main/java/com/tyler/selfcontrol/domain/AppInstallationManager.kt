@@ -272,18 +272,25 @@ class AppInstallationManager @Inject constructor(
             return
         }
 
+        // Primary method: hide the Play Store from launcher
+        val hidden = hidePlayStore()
+        Log.d(TAG, "Play Store hide result: $hidden")
+
+        // Secondary method: try suspension (known to fail on some devices)
         try {
-            devicePolicyManager.setPackagesSuspended(
+            val failed = devicePolicyManager.setPackagesSuspended(
                 adminComponent,
                 arrayOf(PLAY_STORE_PACKAGE),
                 true
             )
-            Log.d(TAG, "Play Store suspended")
+            if (failed.isNotEmpty()) {
+                Log.w(TAG, "setPackagesSuspended failed for Play Store: ${failed.toList()}")
+            } else {
+                Log.d(TAG, "Play Store suspended via setPackagesSuspended")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to suspend Play Store", e)
         }
-
-        hidePlayStore()
     }
 
     /**
@@ -311,19 +318,28 @@ class AppInstallationManager @Inject constructor(
 
     /**
      * Hide the Play Store from the launcher using setApplicationHidden.
+     * @return true if hiding was successful, false otherwise
      */
-    private fun hidePlayStore() {
-        if (!isDeviceOwner()) return
+    private fun hidePlayStore(): Boolean {
+        if (!isDeviceOwner()) {
+            Log.w(TAG, "Cannot hide Play Store: not device owner")
+            return false
+        }
 
-        try {
+        return try {
             val result = devicePolicyManager.setApplicationHidden(
                 adminComponent,
                 PLAY_STORE_PACKAGE,
                 true
             )
-            Log.d(TAG, "Play Store hidden: $result")
+            Log.d(TAG, "setApplicationHidden returned: $result")
+            if (!result) {
+                Log.e(TAG, "setApplicationHidden returned false - Play Store may be protected by system")
+            }
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Failed to hide Play Store", e)
+            false
         }
     }
 

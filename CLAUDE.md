@@ -171,3 +171,10 @@ App installation control with:
 
 ### Hilt Workers:
 Use `@HiltWorker` + `@AssistedInject` pattern (see `ScheduleWorker.kt`)
+
+---
+
+## Notes from Dev
+
+- Don't try to install/stop/restart the app on the emulator because device owner permissions won't let you
+    - Instead, ask me to do it
