@@ -194,13 +194,17 @@ class AppInstallationManager @Inject constructor(
         packageName: String,
         appName: String
     ): Result<AllowedApp> {
+        Log.d(TAG, "addToAllowlistImmediate() called for: $packageName ($appName)")
+
         // Check if blacklisted
         if (repository.isBlacklisted(packageName)) {
+            Log.w(TAG, "addToAllowlistImmediate: $packageName is blacklisted")
             return Result.failure(AppInstallationException("App is blacklisted"))
         }
 
         // Check if already allowed
         if (repository.isAllowed(packageName)) {
+            Log.d(TAG, "addToAllowlistImmediate: $packageName is already allowed")
             val existing = repository.getByPackageName(packageName)
             return if (existing != null) {
                 Result.success(existing)
@@ -209,6 +213,7 @@ class AppInstallationManager @Inject constructor(
             }
         }
 
+        Log.d(TAG, "addToAllowlistImmediate: Adding $packageName to allowlist")
         val id = repository.addToAllowlist(packageName, appName, AllowedAppSource.USER_ADDED)
         val app = AllowedApp(
             id = id,
@@ -218,7 +223,9 @@ class AppInstallationManager @Inject constructor(
         )
 
         // Temporarily unsuspend Play Store for installation
+        Log.d(TAG, "addToAllowlistImmediate: About to unsuspend Play Store")
         unsuspendPlayStore()
+        Log.d(TAG, "addToAllowlistImmediate: Play Store unsuspended, scheduling resuspension")
         scheduleResuspension()
 
         return Result.success(app)
@@ -228,12 +235,18 @@ class AppInstallationManager @Inject constructor(
      * Open Play Store to the app's page for installation.
      */
     fun openPlayStoreForInstall(packageName: String) {
+        Log.d(TAG, "openPlayStoreForInstall() called for: $packageName")
         val intent = Intent(Intent.ACTION_VIEW).apply {
             data = Uri.parse("market://details?id=$packageName")
             setPackage(PLAY_STORE_PACKAGE)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        try {
+            context.startActivity(intent)
+            Log.d(TAG, "openPlayStoreForInstall: Intent started successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "openPlayStoreForInstall: Failed to start intent", e)
+        }
     }
 
     /**
@@ -297,12 +310,15 @@ class AppInstallationManager @Inject constructor(
      * Unsuspend and unhide the Play Store temporarily.
      */
     fun unsuspendPlayStore() {
+        Log.d(TAG, "unsuspendPlayStore() called")
+
         if (!isDeviceOwner()) {
             Log.w(TAG, "Cannot unsuspend Play Store: not device owner")
             return
         }
 
-        unhidePlayStore()
+        val unhideResult = unhidePlayStore()
+        Log.d(TAG, "unhidePlayStore() returned: $unhideResult")
 
         try {
             devicePolicyManager.setPackagesSuspended(
@@ -310,7 +326,7 @@ class AppInstallationManager @Inject constructor(
                 arrayOf(PLAY_STORE_PACKAGE),
                 false
             )
-            Log.d(TAG, "Play Store unsuspended")
+            Log.d(TAG, "Play Store unsuspended via setPackagesSuspended")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to unsuspend Play Store", e)
         }
@@ -345,19 +361,28 @@ class AppInstallationManager @Inject constructor(
 
     /**
      * Unhide the Play Store to allow installation.
+     * @return true if unhiding was successful, false otherwise
      */
-    private fun unhidePlayStore() {
-        if (!isDeviceOwner()) return
+    private fun unhidePlayStore(): Boolean {
+        if (!isDeviceOwner()) {
+            Log.w(TAG, "Cannot unhide Play Store: not device owner")
+            return false
+        }
 
-        try {
+        return try {
             val result = devicePolicyManager.setApplicationHidden(
                 adminComponent,
                 PLAY_STORE_PACKAGE,
                 false
             )
-            Log.d(TAG, "Play Store unhidden: $result")
+            Log.d(TAG, "setApplicationHidden(hidden=false) returned: $result")
+            if (!result) {
+                Log.e(TAG, "Failed to unhide Play Store - setApplicationHidden returned false")
+            }
+            result
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to unhide Play Store", e)
+            Log.e(TAG, "Exception unhiding Play Store", e)
+            false
         }
     }
 

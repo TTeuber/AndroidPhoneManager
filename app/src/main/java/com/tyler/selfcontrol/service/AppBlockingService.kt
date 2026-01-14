@@ -54,6 +54,10 @@ class AppBlockingService : Service() {
     private var blockedPackages = setOf<String>()
     private var isMonitoring = false
 
+    // Retry tracking for failed suspensions
+    private var packagesNeedingRetry = setOf<String>()
+    private var lastRetryAttempt = 0L
+
     // Flow to trigger recalculation when installed packages change
     private val installedPackagesFlow = MutableStateFlow<Set<String>>(emptySet())
 
@@ -69,7 +73,42 @@ class AppBlockingService : Service() {
         override fun run() {
             if (isMonitoring) {
                 checkAndBlockForegroundApp()
+
+                // Periodically retry suspending packages that failed earlier
+                val now = System.currentTimeMillis()
+                if (now - lastRetryAttempt >= RETRY_INTERVAL_MS) {
+                    lastRetryAttempt = now
+                    retryFailedSuspensions()
+                }
+
                 handler.postDelayed(this, CHECK_INTERVAL_MS)
+            }
+        }
+    }
+
+    // Dynamic receiver for package changes (backup for manifest registration)
+    private val packageChangeReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val packageName = intent.data?.schemeSpecificPart ?: return
+            Log.d(TAG, "Dynamic receiver: ${intent.action} for $packageName")
+
+            when (intent.action) {
+                Intent.ACTION_PACKAGE_ADDED,
+                Intent.ACTION_PACKAGE_REPLACED -> {
+                    Log.d(TAG, "Package installed/replaced: $packageName - triggering update")
+                    // Refresh installed packages with a small delay
+                    serviceScope.launch {
+                        delay(500)
+                        installedPackagesFlow.value = getInstalledPackages()
+                        updateSuspendedApps()
+                    }
+                }
+                Intent.ACTION_PACKAGE_FULLY_REMOVED -> {
+                    Log.d(TAG, "Package removed: $packageName - triggering update")
+                    serviceScope.launch {
+                        installedPackagesFlow.value = getInstalledPackages()
+                    }
+                }
             }
         }
     }
@@ -81,6 +120,27 @@ class AppBlockingService : Service() {
         // Initialize installed packages flow
         installedPackagesFlow.value = getInstalledPackages()
         observeBlockedPackages()
+
+        // Register dynamic receiver for package changes
+        // This is more reliable than manifest registration on newer Android versions
+        val packageFilter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED)
+            addDataScheme("package")
+        }
+        registerReceiver(packageChangeReceiver, packageFilter)
+        Log.d(TAG, "Registered dynamic package change receiver")
+
+        // Retry suspension after a delay to handle device owner setup timing
+        // This catches cases where the service starts before device owner is set
+        serviceScope.launch {
+            delay(3000) // Wait for device owner to potentially be set
+            if (blockedPackages.isNotEmpty()) {
+                Log.d(TAG, "Startup retry: attempting to suspend ${blockedPackages.size} blocked packages")
+                retryFailedSuspensions()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -105,6 +165,11 @@ class AppBlockingService : Service() {
 
     override fun onDestroy() {
         stopMonitoring()
+        try {
+            unregisterReceiver(packageChangeReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to unregister package change receiver", e)
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -149,13 +214,14 @@ class AppBlockingService : Service() {
 
                 Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}")
 
-                // Combine all sources
-                fromBlockRules + fromBlacklist + notOnAllowlist
+                // Combine all sources, but NEVER include Play Store
+                // Play Store visibility is managed separately by AppInstallationManager
+                (fromBlockRules + fromBlacklist + notOnAllowlist) - PLAY_STORE_PACKAGE
             }.collectLatest { newBlockedPackages ->
                 val previouslyBlocked = blockedPackages
                 blockedPackages = newBlockedPackages
 
-                Log.d(TAG, "Total blocked packages: ${newBlockedPackages.size}")
+                Log.d(TAG, "observeBlockedPackages: Flow emitted, total blocked packages: ${newBlockedPackages.size}")
 
                 // Debug: Check specifically for YouTube
                 val youtubePackage = "com.google.android.youtube"
@@ -163,6 +229,11 @@ class AppBlockingService : Service() {
                     Log.d(TAG, "YouTube IS in blocked packages")
                 } else {
                     Log.w(TAG, "YouTube is NOT in blocked packages")
+                }
+
+                // Debug: Check if Play Store is in blocked packages (it shouldn't be)
+                if (PLAY_STORE_PACKAGE in newBlockedPackages) {
+                    Log.e(TAG, "WARNING: Play Store IS in blocked packages - this shouldn't happen!")
                 }
 
                 // Unsuspend apps that are no longer blocked
@@ -253,6 +324,10 @@ class AppBlockingService : Service() {
         if (!isDeviceOwner()) {
             Log.e(TAG, "CRITICAL: Cannot suspend packages - app is NOT device owner!")
             Log.e(TAG, "Run: adb shell dpm set-device-owner com.tyler.selfcontrol/.receiver.SelfControlDeviceAdminReceiver")
+            // Track these packages for retry when device owner becomes available
+            if (suspended) {
+                packagesNeedingRetry = packagesNeedingRetry + packages.toSet()
+            }
             return
         }
 
@@ -279,6 +354,10 @@ class AppBlockingService : Service() {
                 )
                 if (failedPackages.isNotEmpty()) {
                     Log.w(TAG, "Failed to ${if (suspended) "suspend" else "unsuspend"} these packages: ${failedPackages.toList()}")
+                    // Track failed packages for retry (only when suspending)
+                    if (suspended) {
+                        packagesNeedingRetry = packagesNeedingRetry + failedPackages.toSet()
+                    }
                     // Specifically check for Play Store failure - use setApplicationHidden as fallback
                     if (PLAY_STORE_PACKAGE in failedPackages && suspended) {
                         Log.d(TAG, "Attempting to hide Play Store using setApplicationHidden")
@@ -289,10 +368,61 @@ class AppBlockingService : Service() {
                     }
                 } else {
                     Log.d(TAG, "Successfully ${if (suspended) "suspended" else "unsuspended"} ${filteredPackages.size} packages")
+                    // Clear successfully suspended packages from retry set
+                    if (suspended) {
+                        packagesNeedingRetry = packagesNeedingRetry - filteredPackages.toSet()
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set packages suspended: $suspended", e)
+            // Track all packages for retry on exception
+            if (suspended) {
+                packagesNeedingRetry = packagesNeedingRetry + packages.toSet()
+            }
+        }
+    }
+
+    /**
+     * Retry suspending packages that failed earlier.
+     * This handles cases where device owner wasn't set initially or suspension temporarily failed.
+     */
+    private fun retryFailedSuspensions() {
+        // Also check blockedPackages in case some weren't suspended
+        val packagesToRetry = (packagesNeedingRetry + blockedPackages).filter { pkg ->
+            pkg != packageName && !isSystemCriticalPackage(pkg)
+        }.toSet()
+
+        if (packagesToRetry.isEmpty()) return
+
+        if (!isDeviceOwner()) {
+            // Still not device owner, keep tracking for later
+            return
+        }
+
+        Log.d(TAG, "Retrying suspension for ${packagesToRetry.size} packages")
+
+        try {
+            val failedPackages = devicePolicyManager.setPackagesSuspended(
+                adminComponent,
+                packagesToRetry.toTypedArray(),
+                true
+            )
+
+            if (failedPackages.isEmpty()) {
+                Log.d(TAG, "Retry successful: suspended ${packagesToRetry.size} packages")
+                packagesNeedingRetry = emptySet()
+            } else {
+                Log.w(TAG, "Retry partially failed: ${failedPackages.toList()} still unsuspended")
+                packagesNeedingRetry = failedPackages.toSet()
+
+                // Handle Play Store specially
+                if (PLAY_STORE_PACKAGE in failedPackages) {
+                    hidePlayStore()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Retry suspension failed with exception", e)
         }
     }
 
@@ -412,6 +542,7 @@ class AppBlockingService : Service() {
         private const val CHANNEL_ID = "app_blocking_channel"
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 1000L // Check every second
+        private const val RETRY_INTERVAL_MS = 5000L // Retry failed suspensions every 5 seconds
         private const val PLAY_STORE_PACKAGE = "com.android.vending"
 
         const val ACTION_START_MONITORING = "com.tyler.selfcontrol.START_MONITORING"
@@ -433,6 +564,7 @@ class AppBlockingService : Service() {
         }
 
         fun updateBlocks(context: Context) {
+            Log.d(TAG, "updateBlocks() called - sending ACTION_UPDATE_BLOCKS")
             val intent = Intent(context, AppBlockingService::class.java).apply {
                 action = ACTION_UPDATE_BLOCKS
             }
