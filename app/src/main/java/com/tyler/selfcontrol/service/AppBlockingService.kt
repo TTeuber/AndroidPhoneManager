@@ -20,6 +20,7 @@ import com.tyler.selfcontrol.MainActivity
 import com.tyler.selfcontrol.R
 import com.tyler.selfcontrol.data.repository.AppInstallationRepository
 import com.tyler.selfcontrol.data.repository.BlockRepository
+import com.tyler.selfcontrol.domain.ChromeRestrictionManager
 import com.tyler.selfcontrol.receiver.SelfControlDeviceAdminReceiver
 import com.tyler.selfcontrol.util.UsageStatsHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -46,6 +47,9 @@ class AppBlockingService : Service() {
 
     @Inject
     lateinit var usageStatsHelper: UsageStatsHelper
+
+    @Inject
+    lateinit var chromeRestrictionManager: ChromeRestrictionManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val handler = Handler(Looper.getMainLooper())
@@ -101,6 +105,12 @@ class AppBlockingService : Service() {
                         delay(500)
                         installedPackagesFlow.value = getInstalledPackages()
                         updateSuspendedApps()
+
+                        // If Chrome was installed, apply URL restrictions to it
+                        if (packageName in listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary")) {
+                            Log.d(TAG, "Chrome installed/updated: $packageName - applying URL restrictions")
+                            chromeRestrictionManager.updateChromeRestrictions()
+                        }
                     }
                 }
                 Intent.ACTION_PACKAGE_FULLY_REMOVED -> {
@@ -120,6 +130,7 @@ class AppBlockingService : Service() {
         // Initialize installed packages flow
         installedPackagesFlow.value = getInstalledPackages()
         observeBlockedPackages()
+        observeWebsiteRules()
 
         // Register dynamic receiver for package changes
         // This is more reliable than manifest registration on newer Android versions
@@ -244,6 +255,19 @@ class AppBlockingService : Service() {
                     Log.d(TAG, "Ensuring all ${newBlockedPackages.size} blocked packages are suspended")
                     setPackagesSuspended(newBlockedPackages.toTypedArray(), true)
                 }
+            }
+        }
+    }
+
+    /**
+     * Observe website rules and sync them to Chrome's managed configuration.
+     * This enables URL blocking in Chrome via DevicePolicyManager.
+     */
+    private fun observeWebsiteRules() {
+        serviceScope.launch {
+            blockRepository.getActiveWebsiteRules().collectLatest { rules ->
+                Log.d(TAG, "Website rules changed: ${rules.size} active rules")
+                chromeRestrictionManager.updateChromeRestrictions()
             }
         }
     }
@@ -414,7 +438,12 @@ class AppBlockingService : Service() {
             "com.android.server.telecom",
             "com.android.providers.contacts",
             "com.android.providers.telephony",
-            "com.android.emergency"
+            "com.android.emergency",
+            // Chrome is managed via URL restrictions, not suspension
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "com.chrome.canary"
         )
         return packageName in criticalPackages || packageName.startsWith("com.android.providers.")
     }

@@ -95,18 +95,6 @@ dependencies {
     implementation(libs.hilt.work)
     ksp(libs.hilt.work.compiler)
 
-    // WebView
-    implementation(libs.webkit)
-
-    // ML Kit Barcode Scanning
-    implementation(libs.mlkit.barcode)
-
-    // CameraX
-    implementation(libs.camera.core)
-    implementation(libs.camera.camera2)
-    implementation(libs.camera.lifecycle)
-    implementation(libs.camera.view)
-
     // Jsoup HTML Parser
     implementation(libs.jsoup)
 
