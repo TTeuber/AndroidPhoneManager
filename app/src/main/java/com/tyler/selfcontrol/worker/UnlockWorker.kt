@@ -7,6 +7,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.tyler.selfcontrol.data.datastore.SettingsDataStore
 import com.tyler.selfcontrol.domain.LockManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -14,20 +15,27 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Worker that periodically checks for expired locks and unlocks them.
+ * This includes both block locks and the Clear Device Owner lock.
  */
 @HiltWorker
 class UnlockWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val lockManager: LockManager
+    private val lockManager: LockManager,
+    private val settingsDataStore: SettingsDataStore
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
         return try {
+            // Process expired block locks
             val unlockCount = lockManager.processExpiredLocks()
             if (unlockCount > 0) {
                 // Could add notification here if desired
             }
+
+            // Process expired Clear Device Owner lock
+            settingsDataStore.checkAndClearExpiredDeviceOwnerLock()
+
             Result.success()
         } catch (e: Exception) {
             Result.retry()

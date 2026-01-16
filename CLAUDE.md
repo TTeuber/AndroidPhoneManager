@@ -51,40 +51,54 @@ data/model/
   Lock.kt           - Lock entity with LockMode enum
   AppRule.kt        - App blocking rule (packageName)
   WebsiteRule.kt    - Website blocking rule (domain, path)
+  AllowedApp.kt     - Allowlist entry (packageName, source)
+  BlacklistedApp.kt - Blacklist entry (packageName, reason)
+  CooldownRequest.kt - Pending installation request with approval window
 
 data/dao/
   BlockDao.kt       - Block CRUD, setScheduleActive()
   AppRuleDao.kt     - getBlockedPackageNames() critical query
   ScheduleDao.kt    - Schedule CRUD
   LockDao.kt        - Lock operations
+  AllowedAppDao.kt  - Allowlist CRUD and queries
+  BlacklistedAppDao.kt - Blacklist CRUD and queries
+  CooldownRequestDao.kt - Cooldown request CRUD and status updates
 
 data/database/
   SelfControlDatabase.kt  - Room DB (version 3)
   Converters.kt          - Type converters for Instant, enums
 
 data/repository/
-  BlockRepository.kt     - Main data access layer
+  BlockRepository.kt         - Main data access layer for blocks
+  AppInstallationRepository.kt - Allowlist, blacklist, and cooldown management
 ```
 
 ### Domain Layer
 ```
 domain/
-  LockManager.kt      - Lock enforcement logic
-  ScheduleManager.kt  - Schedule evaluation logic
-  UrlBlocker.kt       - URL matching and blocking logic for browser
+  LockManager.kt           - Lock enforcement logic
+  ScheduleManager.kt       - Schedule evaluation logic
+  UrlBlocker.kt            - URL matching and blocking logic for browser
+  AppInstallationManager.kt - App installation evaluation and cooldown management
+  PlayStoreParser.kt       - Parses Play Store pages to detect app categories
 ```
 
 ### Workers
 ```
 worker/
-  ScheduleWorker.kt   - Updates isScheduleActive periodically
-  UnlockWorker.kt     - Checks for expired locks
+  ScheduleWorker.kt            - Updates isScheduleActive periodically
+  UnlockWorker.kt              - Checks for expired locks
+  CooldownNotificationWorker.kt - Notifies when cooldown window opens
+  CooldownExpirationWorker.kt   - Expires cooldown requests
 ```
 
-### Services
+### Services & Receivers
 ```
 service/
   AppBlockingService.kt  - Foreground service that monitors/blocks apps
+receiver/
+  PackageChangeReceiver.kt - Detects app installations and triggers blocking updates
+  SelfControlDeviceAdminReceiver.kt - Device admin receiver for Device Owner API
 ```
 
 ### UI Layer
@@ -117,17 +131,30 @@ adb shell dumpsys device_policy
 
 The app uses `DevicePolicyManager.setPackagesSuspended()` for blocking.
 
-## Important Queries
+## App Blocking System
 
-The critical query for determining which packages to block is in `AppRuleDao.kt`:
-```kotlin
-SELECT DISTINCT packageName FROM app_rules
-WHERE blockId IN (
-    SELECT id FROM blocks
-    WHERE isEnabled = 1
-    AND (state = 'ALWAYS_ON' OR (state = 'SCHEDULED' AND isScheduleActive = 1))
-)
-```
+`AppBlockingService` combines three sources to determine which apps to block:
+
+1. **Block Rules** - Apps added to user-created blocks (via `AppRuleDao.getBlockedPackageNames()`):
+   ```kotlin
+   SELECT DISTINCT packageName FROM app_rules
+   WHERE blockId IN (
+       SELECT id FROM blocks
+       WHERE isEnabled = 1
+       AND (state = 'ALWAYS_ON' OR (state = 'SCHEDULED' AND isScheduleActive = 1))
+   )
+   ```
+
+2. **Blacklist** - Apps that can never be installed (from `BlacklistedApp` table)
+   - Play Store, Facebook, Instagram, etc.
+   - Managed via `AppInstallationRepository`
+
+3. **Not on Allowlist** - Non-system apps not explicitly allowed
+   - Only blocks apps installed after initial setup
+   - System packages (com.android.*, com.google.*, android.*) are exempt
+   - Apps must be on allowlist to run without being blocked
+
+The service uses `DevicePolicyManager.setPackagesSuspended()` to suspend blocked apps and monitors the foreground app every second to immediately block attempts to open suspended apps.
 
 ## Build
 
@@ -149,15 +176,34 @@ Uses signing config from `keystore.properties` (even for debug builds to maintai
 - [ ] Phase 8: Security Hardening
 - [ ] Phase 9: Polish & Testing
 
-## Phase 7 Notes (Next Up)
+## App Installation Control (Phase 7)
 
-App installation control with:
-- Play Store link parsing with Jsoup
-- Category detection (Social, Entertainment, Video Players)
-- Game detection ("About This Game" text)
-- Browser detection (keyword matching)
-- Cooldown queue for restricted apps
-- Play Store suspension/unsuspension
+**Status:** Partially implemented
+
+The app controls which apps can be installed through an allowlist/blacklist system:
+
+### Blocking Mechanism
+- Apps installed without being on the allowlist are automatically blocked by `AppBlockingService`
+- `PackageChangeReceiver` detects new installations and triggers blocking evaluation
+- Dynamic BroadcastReceiver in `AppBlockingService` provides backup detection
+- Retry mechanism handles cases where device owner becomes available after startup
+
+### Play Store Parsing
+- `PlayStoreParser` fetches and parses Play Store pages using Jsoup
+- Category detection: Social, Entertainment, Video Players, Games, Browsers
+- Game detection via "About This Game" section text
+- Browser detection via keyword matching
+
+### Cooldown System
+- Restricted apps require 24-hour cooldown before installation
+- Approval window: 3-6 PM next day
+- `CooldownNotificationWorker` notifies when approval window opens
+- `CooldownExpirationWorker` expires requests after window closes
+
+### Database Models
+- `AllowedApp` - Apps permitted for installation
+- `BlacklistedApp` - Apps that can never be installed
+- `CooldownRequest` - Pending installation requests with approval windows
 
 ## Common Patterns
 
@@ -176,5 +222,4 @@ Use `@HiltWorker` + `@AssistedInject` pattern (see `ScheduleWorker.kt`)
 
 ## Notes from Dev
 
-- Don't try to install/stop/restart the app on the emulator because device owner permissions won't let you
-    - Instead, ask me to do it
+- use `adb -e install -r -t app/build/outputs/apk/debug/app-debug.apk` to install the app to the emulator

@@ -31,8 +31,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -50,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -69,14 +66,12 @@ import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.data.model.Schedule
 import com.tyler.selfcontrol.data.model.WebsiteRule
+import com.tyler.selfcontrol.ui.components.LockDialog
 import com.tyler.selfcontrol.ui.viewmodel.BlockEditViewModel
 import com.tyler.selfcontrol.ui.viewmodel.InstalledApp
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -758,262 +753,6 @@ private fun LockStatusCard(
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LockDialog(
-    onLockUntilDateTime: (Instant) -> Unit,
-    onLockForDuration: (Duration) -> Unit,
-    onLockForever: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-
-    // Duration state
-    var durationHours by remember { mutableStateOf("1") }
-    var durationMinutes by remember { mutableStateOf("0") }
-
-    // Date/time state
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    var selectedTime by remember { mutableStateOf(LocalTime.of(12, 0)) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set Lock") },
-        text = {
-            Column {
-                // Tab row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { selectedTab = 0 },
-                        modifier = Modifier.weight(1f),
-                        colors = if (selectedTab == 0) {
-                            ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        } else {
-                            ButtonDefaults.outlinedButtonColors()
-                        }
-                    ) {
-                        Text("Timer", style = MaterialTheme.typography.labelSmall)
-                    }
-                    OutlinedButton(
-                        onClick = { selectedTab = 1 },
-                        modifier = Modifier.weight(1f),
-                        colors = if (selectedTab == 1) {
-                            ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        } else {
-                            ButtonDefaults.outlinedButtonColors()
-                        }
-                    ) {
-                        Text("Until", style = MaterialTheme.typography.labelSmall)
-                    }
-                    OutlinedButton(
-                        onClick = { selectedTab = 2 },
-                        modifier = Modifier.weight(1f),
-                        colors = if (selectedTab == 2) {
-                            ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        } else {
-                            ButtonDefaults.outlinedButtonColors()
-                        }
-                    ) {
-                        Text("Forever", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                when (selectedTab) {
-                    0 -> {
-                        // Timer mode
-                        Text(
-                            text = "Lock for a duration:",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = durationHours,
-                                onValueChange = { durationHours = it.filter { c -> c.isDigit() } },
-                                label = { Text("Hours") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = durationMinutes,
-                                onValueChange = { durationMinutes = it.filter { c -> c.isDigit() } },
-                                label = { Text("Minutes") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                        }
-                    }
-                    1 -> {
-                        // Until date/time mode
-                        Text(
-                            text = "Lock until a specific date and time:",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedButton(
-                            onClick = { showDatePicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(selectedDate?.toString() ?: "Select Date")
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedButton(
-                            onClick = { showTimePicker = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(String.format("%02d:%02d", selectedTime.hour, selectedTime.minute))
-                        }
-                    }
-                    2 -> {
-                        // Forever mode
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Warning: Forever locks cannot be undone!",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "This will permanently lock this block. You will not be able to remove blocked items or disable the block.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    when (selectedTab) {
-                        0 -> {
-                            val hours = durationHours.toLongOrNull() ?: 0
-                            val minutes = durationMinutes.toLongOrNull() ?: 0
-                            if (hours > 0 || minutes > 0) {
-                                val duration = Duration.ofHours(hours).plusMinutes(minutes)
-                                onLockForDuration(duration)
-                            }
-                        }
-                        1 -> {
-                            selectedDate?.let { date ->
-                                val dateTime = LocalDateTime.of(date, selectedTime)
-                                val instant = dateTime.atZone(ZoneId.systemDefault()).toInstant()
-                                if (instant.isAfter(Instant.now())) {
-                                    onLockUntilDateTime(instant)
-                                }
-                            }
-                        }
-                        2 -> onLockForever()
-                    }
-                },
-                enabled = when (selectedTab) {
-                    0 -> (durationHours.toLongOrNull() ?: 0) > 0 || (durationMinutes.toLongOrNull() ?: 0) > 0
-                    1 -> selectedDate != null
-                    else -> true
-                }
-            ) {
-                Text(if (selectedTab == 2) "Lock Forever" else "Lock")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-
-    // Date Picker Dialog
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis() + 86400000 // Tomorrow
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            selectedDate = Instant.ofEpochMilli(millis)
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate()
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    // Time Picker Dialog
-    if (showTimePicker) {
-        val timePickerState = rememberTimePickerState(
-            initialHour = selectedTime.hour,
-            initialMinute = selectedTime.minute,
-            is24Hour = true
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
-            text = {
-                TimePicker(state = timePickerState)
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
 
