@@ -18,9 +18,11 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.tyler.selfcontrol.MainActivity
 import com.tyler.selfcontrol.R
+import com.tyler.selfcontrol.data.datastore.SettingsDataStore
+import com.tyler.selfcontrol.data.datastore.YouTubeRestrictLevel
 import com.tyler.selfcontrol.data.repository.AppInstallationRepository
 import com.tyler.selfcontrol.data.repository.BlockRepository
-import com.tyler.selfcontrol.domain.ChromeRestrictionManager
+import com.tyler.selfcontrol.domain.ContentRestrictionManager
 import com.tyler.selfcontrol.receiver.SelfControlDeviceAdminReceiver
 import com.tyler.selfcontrol.util.UsageStatsHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -49,7 +51,10 @@ class AppBlockingService : Service() {
     lateinit var usageStatsHelper: UsageStatsHelper
 
     @Inject
-    lateinit var chromeRestrictionManager: ChromeRestrictionManager
+    lateinit var contentRestrictionManager: ContentRestrictionManager
+
+    @Inject
+    lateinit var settingsDataStore: SettingsDataStore
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val handler = Handler(Looper.getMainLooper())
@@ -109,7 +114,7 @@ class AppBlockingService : Service() {
                         // If Chrome was installed, apply URL restrictions to it
                         if (packageName in listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary")) {
                             Log.d(TAG, "Chrome installed/updated: $packageName - applying URL restrictions")
-                            chromeRestrictionManager.updateChromeRestrictions()
+                            contentRestrictionManager.updateChromeRestrictions()
                         }
                     }
                 }
@@ -131,6 +136,7 @@ class AppBlockingService : Service() {
         installedPackagesFlow.value = getInstalledPackages()
         observeBlockedPackages()
         observeWebsiteRules()
+        observeContentRestrictionSettings()
 
         // Register dynamic receiver for package changes
         // This is more reliable than manifest registration on newer Android versions
@@ -194,13 +200,24 @@ class AppBlockingService : Service() {
      */
     private fun observeBlockedPackages() {
         serviceScope.launch {
-            // Combine all four sources of blocking info
+            // Combine content restriction settings into a single flow first
+            val contentRestrictionsFlow = combine(
+                settingsDataStore.youtubeRestrictStateFlow,
+                settingsDataStore.incognitoDisabledStateFlow
+            ) { youtubeRestrict, incognitoDisabled ->
+                Pair(youtubeRestrict, incognitoDisabled)
+            }
+
+            // Combine all sources of blocking info including content restriction settings
             combine(
                 blockRepository.getBlockedPackageNames(),
                 appInstallationRepository.getBlacklistedApps(),
                 appInstallationRepository.getAllowedPackageNamesFlow(),
-                installedPackagesFlow
-            ) { blockRulePackages, blacklistedApps, allowedPackages, allInstalledPackages ->
+                installedPackagesFlow,
+                contentRestrictionsFlow
+            ) { blockRulePackages, blacklistedApps, allowedPackages, allInstalledPackages, contentRestrictions ->
+                val (youtubeRestrictState, incognitoDisabledState) = contentRestrictions
+
                 // Calculate all packages that should be blocked
 
                 // Source 1: Packages from user-defined blocks (original Phase 3-5 functionality)
@@ -223,10 +240,22 @@ class AppBlockingService : Service() {
                     pkg != packageName
                 }.toSet()
 
-                Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}")
+                // Source 4: YouTube app blocked when content restrictions are enabled
+                // Since YouTube app doesn't support managed configuration, we block the app entirely
+                // when YouTube restrictions or incognito restrictions are enabled
+                val youtubePackage = "com.google.android.youtube"
+                val shouldBlockYouTube = youtubeRestrictState.value != YouTubeRestrictLevel.OFF || incognitoDisabledState.value
+                val fromContentRestrictions = if (shouldBlockYouTube && allInstalledPackages.contains(youtubePackage)) {
+                    Log.d(TAG, "Blocking YouTube app due to content restrictions (Restrict=${youtubeRestrictState.value}, IncognitoDisabled=${incognitoDisabledState.value})")
+                    setOf(youtubePackage)
+                } else {
+                    emptySet()
+                }
+
+                Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}, Content restrictions: ${fromContentRestrictions.size}")
 
                 // Combine all sources
-                fromBlockRules + fromBlacklist + notOnAllowlist
+                fromBlockRules + fromBlacklist + notOnAllowlist + fromContentRestrictions
             }.collectLatest { newBlockedPackages ->
                 val previouslyBlocked = blockedPackages
                 blockedPackages = newBlockedPackages
@@ -267,7 +296,26 @@ class AppBlockingService : Service() {
         serviceScope.launch {
             blockRepository.getActiveWebsiteRules().collectLatest { rules ->
                 Log.d(TAG, "Website rules changed: ${rules.size} active rules")
-                chromeRestrictionManager.updateChromeRestrictions()
+                contentRestrictionManager.updateChromeRestrictions()
+            }
+        }
+    }
+
+    /**
+     * Observe content restriction settings (SafeSearch, YouTube Restrict, Incognito Disabled)
+     * and update Chrome/YouTube app restrictions when they change.
+     */
+    private fun observeContentRestrictionSettings() {
+        serviceScope.launch {
+            combine(
+                settingsDataStore.safeSearchStateFlow,
+                settingsDataStore.youtubeRestrictStateFlow,
+                settingsDataStore.incognitoDisabledStateFlow
+            ) { safeSearch, youtubeRestrict, incognitoDisabled ->
+                Triple(safeSearch, youtubeRestrict, incognitoDisabled)
+            }.collectLatest { (safeSearch, youtubeRestrict, incognitoDisabled) ->
+                Log.d(TAG, "Content restriction settings changed: SafeSearch=${safeSearch.value}, YouTubeRestrict=${youtubeRestrict.value}, IncognitoDisabled=${incognitoDisabled.value}")
+                contentRestrictionManager.updateAllRestrictions()
             }
         }
     }

@@ -36,6 +36,11 @@ class UnlockWorker @AssistedInject constructor(
             // Process expired Clear Device Owner lock
             settingsDataStore.checkAndClearExpiredDeviceOwnerLock()
 
+            // Process expired content restriction settings locks
+            settingsDataStore.checkAndClearExpiredSafeSearchLock()
+            settingsDataStore.checkAndClearExpiredYouTubeRestrictLock()
+            settingsDataStore.checkAndClearExpiredIncognitoDisabledLock()
+
             Result.success()
         } catch (e: Exception) {
             Result.retry()

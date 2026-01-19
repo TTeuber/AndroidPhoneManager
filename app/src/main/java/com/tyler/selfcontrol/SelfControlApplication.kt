@@ -52,7 +52,6 @@ class SelfControlApplication : Application(), Configuration.Provider {
 
             // Initialize blacklist with default entries if empty
             initializeBlacklistIfNeeded()
-            appInstallationRepository.removeFromBlacklist("com.google.android.youtube")
         }
     }
 
