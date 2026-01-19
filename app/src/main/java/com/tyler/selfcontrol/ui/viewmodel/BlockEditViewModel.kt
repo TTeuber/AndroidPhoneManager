@@ -164,13 +164,13 @@ class BlockEditViewModel @Inject constructor(
         }
     }
 
-    fun addWebsite(domain: String, path: String? = null) {
+    fun addWebsite(domain: String, path: String? = null, isAllowed: Boolean = false) {
         viewModelScope.launch {
             blockRepository.addWebsiteRule(
                 blockId = blockId,
                 domain = domain.lowercase().trim(),
                 path = path?.trim()?.takeIf { it.isNotEmpty() },
-                isAllowed = false
+                isAllowed = isAllowed
             )
             refreshWebsiteRules()
         }

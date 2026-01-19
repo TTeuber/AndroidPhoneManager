@@ -69,6 +69,7 @@ import com.tyler.selfcontrol.data.model.WebsiteRule
 import com.tyler.selfcontrol.ui.components.LockDialog
 import com.tyler.selfcontrol.ui.viewmodel.BlockEditViewModel
 import com.tyler.selfcontrol.ui.viewmodel.InstalledApp
+import com.tyler.selfcontrol.util.parseUrl
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
@@ -215,7 +216,7 @@ fun BlockEditScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 SectionHeader(
-                    title = "Blocked Websites",
+                    title = "Website Rules",
                     count = uiState.websiteRules.size,
                     onAddClick = { showAddWebsiteDialog = true }
                 )
@@ -223,7 +224,7 @@ fun BlockEditScreen(
 
             if (uiState.websiteRules.isEmpty()) {
                 item {
-                    EmptyStateCard(text = "No websites blocked. Tap + to add websites.")
+                    EmptyStateCard(text = "No website rules. Tap + to add websites.")
                 }
             } else {
                 items(uiState.websiteRules, key = { it.id }) { websiteRule ->
@@ -294,8 +295,8 @@ fun BlockEditScreen(
     // Add Website Dialog
     if (showAddWebsiteDialog) {
         AddWebsiteDialog(
-            onAdd = { domain, path ->
-                viewModel.addWebsite(domain, path)
+            onAdd = { domain, path, isAllowed ->
+                viewModel.addWebsite(domain, path, isAllowed)
                 showAddWebsiteDialog = false
             },
             onDismiss = { showAddWebsiteDialog = false }
@@ -504,8 +505,23 @@ private fun WebsiteRuleCard(
     isLocked: Boolean,
     onRemove: () -> Unit
 ) {
+    val isAllowed = websiteRule.isAllowed
+    val fullUrl = buildString {
+        append(websiteRule.domain)
+        if (!websiteRule.path.isNullOrEmpty()) {
+            append(websiteRule.path)
+        }
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAllowed) {
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -514,16 +530,34 @@ private fun WebsiteRuleCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = websiteRule.domain,
-                    style = MaterialTheme.typography.bodyLarge
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isAllowed) Icons.Default.Check else Icons.Default.Close,
+                    contentDescription = if (isAllowed) "Allowed" else "Blocked",
+                    tint = if (isAllowed) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.size(20.dp)
                 )
-                if (!websiteRule.path.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
                     Text(
-                        text = "Path: ${websiteRule.path}",
+                        text = fullUrl,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = if (isAllowed) "Allowed" else "Blocked",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isAllowed) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
                     )
                 }
             }
@@ -628,52 +662,80 @@ private fun AppPickerDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddWebsiteDialog(
-    onAdd: (domain: String, path: String?) -> Unit,
+    onAdd: (domain: String, path: String?, isAllowed: Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var domain by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var isAllowed by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Website to Block") },
+        title = { Text("Add Website Rule") },
         text = {
             Column {
                 OutlinedTextField(
-                    value = domain,
-                    onValueChange = { domain = it },
-                    label = { Text("Domain") },
-                    placeholder = { Text("example.com") },
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL") },
+                    placeholder = { Text("youtube.com/shorts") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = path,
-                    onValueChange = { path = it },
-                    label = { Text("Path (optional)") },
-                    placeholder = { Text("/shorts") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Supported formats:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Example: youtube.com with path /shorts to block youtube.com/shorts",
+                    text = "  \u2022 example.com",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    text = "  \u2022 example.com/path",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "  \u2022 https://example.com/path",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                // TODO: Block/Allow toggle disabled for now - uncomment to re-enable allowlist feature
+                // Spacer(modifier = Modifier.height(16.dp))
+                // SingleChoiceSegmentedButtonRow(
+                //     modifier = Modifier.fillMaxWidth()
+                // ) {
+                //     SegmentedButton(
+                //         selected = !isAllowed,
+                //         onClick = { isAllowed = false },
+                //         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                //     ) {
+                //         Text("Block")
+                //     }
+                //     SegmentedButton(
+                //         selected = isAllowed,
+                //         onClick = { isAllowed = true },
+                //         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                //     ) {
+                //         Text("Allow")
+                //     }
+                // }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (domain.isNotBlank()) {
-                        onAdd(domain, path.takeIf { it.isNotBlank() })
+                    if (url.isNotBlank()) {
+                        val parsed = parseUrl(url)
+                        onAdd(parsed.domain, parsed.path, isAllowed)
                     }
                 },
-                enabled = domain.isNotBlank()
+                enabled = url.isNotBlank()
             ) {
                 Text("Add")
             }

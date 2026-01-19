@@ -131,7 +131,6 @@ class AppInstallationRepository @Inject constructor(
             BlacklistedApp(packageName = "com.reddit.frontpage", appName = "Reddit", reason = "Social media"),
             BlacklistedApp(packageName = "com.facebook.katana", appName = "Facebook", reason = "Social media"),
             BlacklistedApp(packageName = "com.snapchat.android", appName = "Snapchat", reason = "Social media"),
-            BlacklistedApp(packageName = "com.google.android.youtube", appName = "YouTube", reason = "Entertainment"),
             BlacklistedApp(packageName = "com.laurencedawson.reddit_sync", appName = "Sync for Reddit", reason = "Reddit client"),
             BlacklistedApp(packageName = "com.andrewshu.android.reddit", appName = "Reddit is Fun", reason = "Reddit client"),
             BlacklistedApp(packageName = "com.rubenmayayo.reddit", appName = "Boost for Reddit", reason = "Reddit client"),
