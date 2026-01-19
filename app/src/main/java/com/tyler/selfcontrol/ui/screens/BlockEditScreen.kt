@@ -66,6 +66,7 @@ import com.tyler.selfcontrol.data.model.BlockState
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.data.model.Schedule
 import com.tyler.selfcontrol.data.model.WebsiteRule
+import com.tyler.selfcontrol.ui.components.ExtendLockDialog
 import com.tyler.selfcontrol.ui.components.LockDialog
 import com.tyler.selfcontrol.ui.viewmodel.BlockEditViewModel
 import com.tyler.selfcontrol.ui.viewmodel.InstalledApp
@@ -88,6 +89,7 @@ fun BlockEditScreen(
     var isEditingName by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf("") }
     var showLockDialog by remember { mutableStateOf(false) }
+    var showExtendLockDialog by remember { mutableStateOf(false) }
     var showForeverConfirmDialog by remember { mutableStateOf(false) }
     var showScheduleStartTimePicker by remember { mutableStateOf(false) }
     var showScheduleEndTimePicker by remember { mutableStateOf(false) }
@@ -272,7 +274,9 @@ fun BlockEditScreen(
                     lock = uiState.lock,
                     lockStatusText = uiState.lockStatusText,
                     isLocked = uiState.isLocked,
-                    onSetLock = { showLockDialog = true }
+                    canExtendLock = uiState.canExtendLock,
+                    onSetLock = { showLockDialog = true },
+                    onExtendLock = { showExtendLockDialog = true }
                 )
             }
 
@@ -319,6 +323,23 @@ fun BlockEditScreen(
                 showForeverConfirmDialog = true
             },
             onDismiss = { showLockDialog = false }
+        )
+    }
+
+    // Extend Lock Dialog
+    val currentUnlockTime = uiState.currentUnlockTime
+    if (showExtendLockDialog && currentUnlockTime != null) {
+        ExtendLockDialog(
+            currentUnlockTime = currentUnlockTime,
+            onExtendByDuration = { duration ->
+                viewModel.extendLockByDuration(duration)
+                showExtendLockDialog = false
+            },
+            onExtendUntil = { instant ->
+                viewModel.extendLockUntil(instant)
+                showExtendLockDialog = false
+            },
+            onDismiss = { showExtendLockDialog = false }
         )
     }
 
@@ -753,7 +774,9 @@ private fun LockStatusCard(
     lock: com.tyler.selfcontrol.data.model.Lock?,
     lockStatusText: String,
     isLocked: Boolean,
-    onSetLock: () -> Unit
+    canExtendLock: Boolean,
+    onSetLock: () -> Unit,
+    onExtendLock: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -813,6 +836,16 @@ private fun LockStatusCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
+
+                if (canExtendLock) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = onExtendLock,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Extend Lock")
+                    }
+                }
             }
         }
     }

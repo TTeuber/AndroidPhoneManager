@@ -148,6 +148,31 @@ class SettingsDataStore @Inject constructor(
         return false
     }
 
+    suspend fun extendClearDeviceOwnerLockByDuration(additionalDuration: Duration): Boolean {
+        val state = clearDeviceOwnerLockFlow.first()
+        if (state.mode != LockMode.TIMER && state.mode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime ?: Instant.now()
+        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val newUnlockTime = baseTime.plus(additionalDuration)
+        setClearDeviceOwnerLock(state.mode, newUnlockTime)
+        return true
+    }
+
+    suspend fun extendClearDeviceOwnerLockUntil(newUnlockTime: Instant): Boolean {
+        val state = clearDeviceOwnerLockFlow.first()
+        if (state.mode != LockMode.TIMER && state.mode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime
+        if (currentUnlockTime != null && newUnlockTime.isBefore(currentUnlockTime)) {
+            return false
+        }
+        setClearDeviceOwnerLock(state.mode, newUnlockTime)
+        return true
+    }
+
     // ==================== SafeSearch Setting ====================
 
     val safeSearchStateFlow: Flow<LockableSettingState<Boolean>> = context.dataStore.data.map { preferences ->
@@ -203,6 +228,31 @@ class SettingsDataStore @Inject constructor(
             }
         }
         return false
+    }
+
+    suspend fun extendSafeSearchLockByDuration(additionalDuration: Duration): Boolean {
+        val state = safeSearchStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime ?: Instant.now()
+        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val newUnlockTime = baseTime.plus(additionalDuration)
+        setSafeSearchLock(state.lockMode, newUnlockTime)
+        return true
+    }
+
+    suspend fun extendSafeSearchLockUntil(newUnlockTime: Instant): Boolean {
+        val state = safeSearchStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime
+        if (currentUnlockTime != null && newUnlockTime.isBefore(currentUnlockTime)) {
+            return false
+        }
+        setSafeSearchLock(state.lockMode, newUnlockTime)
+        return true
     }
 
     // ==================== YouTube Restrict Setting ====================
@@ -262,6 +312,31 @@ class SettingsDataStore @Inject constructor(
         return false
     }
 
+    suspend fun extendYouTubeRestrictLockByDuration(additionalDuration: Duration): Boolean {
+        val state = youtubeRestrictStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime ?: Instant.now()
+        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val newUnlockTime = baseTime.plus(additionalDuration)
+        setYouTubeRestrictLock(state.lockMode, newUnlockTime)
+        return true
+    }
+
+    suspend fun extendYouTubeRestrictLockUntil(newUnlockTime: Instant): Boolean {
+        val state = youtubeRestrictStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime
+        if (currentUnlockTime != null && newUnlockTime.isBefore(currentUnlockTime)) {
+            return false
+        }
+        setYouTubeRestrictLock(state.lockMode, newUnlockTime)
+        return true
+    }
+
     // ==================== Incognito Disabled Setting ====================
 
     val incognitoDisabledStateFlow: Flow<LockableSettingState<Boolean>> = context.dataStore.data.map { preferences ->
@@ -317,5 +392,30 @@ class SettingsDataStore @Inject constructor(
             }
         }
         return false
+    }
+
+    suspend fun extendIncognitoDisabledLockByDuration(additionalDuration: Duration): Boolean {
+        val state = incognitoDisabledStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime ?: Instant.now()
+        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val newUnlockTime = baseTime.plus(additionalDuration)
+        setIncognitoDisabledLock(state.lockMode, newUnlockTime)
+        return true
+    }
+
+    suspend fun extendIncognitoDisabledLockUntil(newUnlockTime: Instant): Boolean {
+        val state = incognitoDisabledStateFlow.first()
+        if (state.lockMode != LockMode.TIMER && state.lockMode != LockMode.UNTIL_DATETIME) {
+            return false
+        }
+        val currentUnlockTime = state.unlockTime
+        if (currentUnlockTime != null && newUnlockTime.isBefore(currentUnlockTime)) {
+            return false
+        }
+        setIncognitoDisabledLock(state.lockMode, newUnlockTime)
+        return true
     }
 }

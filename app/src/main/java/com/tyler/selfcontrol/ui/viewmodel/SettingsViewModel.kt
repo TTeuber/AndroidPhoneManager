@@ -64,6 +64,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun extendClearDeviceOwnerLockByDuration(duration: Duration) {
+        viewModelScope.launch {
+            settingsDataStore.extendClearDeviceOwnerLockByDuration(duration)
+        }
+    }
+
+    fun extendClearDeviceOwnerLockUntil(newUnlockTime: Instant) {
+        viewModelScope.launch {
+            settingsDataStore.extendClearDeviceOwnerLockUntil(newUnlockTime)
+        }
+    }
+
     // ==================== SafeSearch Setting ====================
 
     fun setSafeSearchEnabled(enabled: Boolean) {
@@ -88,6 +100,18 @@ class SettingsViewModel @Inject constructor(
     fun lockSafeSearchForever() {
         viewModelScope.launch {
             settingsDataStore.lockSafeSearchForever()
+        }
+    }
+
+    fun extendSafeSearchLockByDuration(duration: Duration) {
+        viewModelScope.launch {
+            settingsDataStore.extendSafeSearchLockByDuration(duration)
+        }
+    }
+
+    fun extendSafeSearchLockUntil(newUnlockTime: Instant) {
+        viewModelScope.launch {
+            settingsDataStore.extendSafeSearchLockUntil(newUnlockTime)
         }
     }
 
@@ -118,6 +142,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun extendYouTubeRestrictLockByDuration(duration: Duration) {
+        viewModelScope.launch {
+            settingsDataStore.extendYouTubeRestrictLockByDuration(duration)
+        }
+    }
+
+    fun extendYouTubeRestrictLockUntil(newUnlockTime: Instant) {
+        viewModelScope.launch {
+            settingsDataStore.extendYouTubeRestrictLockUntil(newUnlockTime)
+        }
+    }
+
     // ==================== Incognito Disabled Setting ====================
 
     fun setIncognitoDisabled(disabled: Boolean) {
@@ -142,6 +178,18 @@ class SettingsViewModel @Inject constructor(
     fun lockIncognitoDisabledForever() {
         viewModelScope.launch {
             settingsDataStore.lockIncognitoDisabledForever()
+        }
+    }
+
+    fun extendIncognitoDisabledLockByDuration(duration: Duration) {
+        viewModelScope.launch {
+            settingsDataStore.extendIncognitoDisabledLockByDuration(duration)
+        }
+    }
+
+    fun extendIncognitoDisabledLockUntil(newUnlockTime: Instant) {
+        viewModelScope.launch {
+            settingsDataStore.extendIncognitoDisabledLockUntil(newUnlockTime)
         }
     }
 }

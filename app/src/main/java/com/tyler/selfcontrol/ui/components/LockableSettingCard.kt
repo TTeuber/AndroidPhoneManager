@@ -36,9 +36,15 @@ fun <T> LockableSettingCard(
     state: LockableSettingState<T>,
     onLockClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onExtendClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     val isLocked = state.isLocked
+
+    // Check if lock can be extended (TIMER or UNTIL_DATETIME with future unlock time)
+    val canExtend = isLocked && onExtendClick != null &&
+            (state.lockMode == LockMode.TIMER || state.lockMode == LockMode.UNTIL_DATETIME) &&
+            state.unlockTime?.let { Instant.now().isBefore(it) } == true
 
     // Get lock status description
     val lockStatusText = when (state.lockMode) {
@@ -131,17 +137,30 @@ fun <T> LockableSettingCard(
                 // Setting control (switch, dropdown, etc.)
                 content()
 
-                // Lock button
-                OutlinedButton(
-                    onClick = onLockClick,
-                    enabled = !isLocked
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("Lock")
+                    // Extend button (only when locked and extendable)
+                    if (canExtend) {
+                        OutlinedButton(
+                            onClick = { onExtendClick?.invoke() }
+                        ) {
+                            Text("Extend")
+                        }
+                    }
+
+                    // Lock button
+                    OutlinedButton(
+                        onClick = onLockClick,
+                        enabled = !isLocked
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("Lock")
+                    }
                 }
             }
         }

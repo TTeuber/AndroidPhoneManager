@@ -56,6 +56,7 @@ import com.tyler.selfcontrol.data.datastore.YouTubeRestrictLevel
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.domain.LockManager
 import com.tyler.selfcontrol.receiver.SelfControlDeviceAdminReceiver
+import com.tyler.selfcontrol.ui.components.ExtendLockDialog
 import com.tyler.selfcontrol.ui.components.LockDialog
 import com.tyler.selfcontrol.ui.components.LockableSettingCard
 import com.tyler.selfcontrol.ui.viewmodel.SettingsViewModel
@@ -98,6 +99,12 @@ fun SettingsScreen(
     var showYouTubeForeverConfirm by remember { mutableStateOf(false) }
     var showIncognitoLockDialog by remember { mutableStateOf(false) }
     var showIncognitoForeverConfirm by remember { mutableStateOf(false) }
+
+    // Extend dialog states
+    var showExtendClearDeviceOwnerDialog by remember { mutableStateOf(false) }
+    var showExtendSafeSearchDialog by remember { mutableStateOf(false) }
+    var showExtendYouTubeDialog by remember { mutableStateOf(false) }
+    var showExtendIncognitoDialog by remember { mutableStateOf(false) }
 
     val isDeviceOwner = remember {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -219,6 +226,16 @@ fun SettingsScreen(
                                 Text("Clear")
                             }
 
+                            // Show Extend button when lock can be extended
+                            if (isLocked && (lockState.mode == LockMode.TIMER || lockState.mode == LockMode.UNTIL_DATETIME)) {
+                                OutlinedButton(
+                                    onClick = { showExtendClearDeviceOwnerDialog = true },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Extend")
+                                }
+                            }
+
                             OutlinedButton(
                                 onClick = { showLockDialog = true },
                                 modifier = Modifier.weight(1f),
@@ -309,7 +326,8 @@ fun SettingsScreen(
                     title = "Force SafeSearch",
                     description = "Force Google SafeSearch and block other search engines",
                     state = safeSearchState,
-                    onLockClick = { showSafeSearchLockDialog = true }
+                    onLockClick = { showSafeSearchLockDialog = true },
+                    onExtendClick = { showExtendSafeSearchDialog = true }
                 ) {
                     Switch(
                         checked = safeSearchState.value,
@@ -327,7 +345,8 @@ fun SettingsScreen(
                     title = "YouTube Restricted Mode",
                     description = "Enforce restricted mode on YouTube web. YouTube app will be blocked.",
                     state = youtubeRestrictState,
-                    onLockClick = { showYouTubeLockDialog = true }
+                    onLockClick = { showYouTubeLockDialog = true },
+                    onExtendClick = { showExtendYouTubeDialog = true }
                 ) {
                     var expanded by remember { mutableStateOf(false) }
                     Box {
@@ -381,7 +400,8 @@ fun SettingsScreen(
                     title = "Disable Incognito Mode",
                     description = "Disable incognito in Chrome. YouTube app will be blocked.",
                     state = incognitoDisabledState,
-                    onLockClick = { showIncognitoLockDialog = true }
+                    onLockClick = { showIncognitoLockDialog = true },
+                    onExtendClick = { showExtendIncognitoDialog = true }
                 ) {
                     Switch(
                         checked = incognitoDisabledState.value,
@@ -628,6 +648,76 @@ fun SettingsScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // ==================== Extend Lock Dialogs ====================
+
+    // Extend Clear Device Owner Lock
+    val clearDeviceOwnerUnlockTime = lockState.unlockTime
+    if (showExtendClearDeviceOwnerDialog && clearDeviceOwnerUnlockTime != null) {
+        ExtendLockDialog(
+            currentUnlockTime = clearDeviceOwnerUnlockTime,
+            onExtendByDuration = { duration ->
+                viewModel.extendClearDeviceOwnerLockByDuration(duration)
+                showExtendClearDeviceOwnerDialog = false
+            },
+            onExtendUntil = { instant ->
+                viewModel.extendClearDeviceOwnerLockUntil(instant)
+                showExtendClearDeviceOwnerDialog = false
+            },
+            onDismiss = { showExtendClearDeviceOwnerDialog = false }
+        )
+    }
+
+    // Extend SafeSearch Lock
+    val safeSearchUnlockTime = safeSearchState.unlockTime
+    if (showExtendSafeSearchDialog && safeSearchUnlockTime != null) {
+        ExtendLockDialog(
+            currentUnlockTime = safeSearchUnlockTime,
+            onExtendByDuration = { duration ->
+                viewModel.extendSafeSearchLockByDuration(duration)
+                showExtendSafeSearchDialog = false
+            },
+            onExtendUntil = { instant ->
+                viewModel.extendSafeSearchLockUntil(instant)
+                showExtendSafeSearchDialog = false
+            },
+            onDismiss = { showExtendSafeSearchDialog = false }
+        )
+    }
+
+    // Extend YouTube Restrict Lock
+    val youtubeUnlockTime = youtubeRestrictState.unlockTime
+    if (showExtendYouTubeDialog && youtubeUnlockTime != null) {
+        ExtendLockDialog(
+            currentUnlockTime = youtubeUnlockTime,
+            onExtendByDuration = { duration ->
+                viewModel.extendYouTubeRestrictLockByDuration(duration)
+                showExtendYouTubeDialog = false
+            },
+            onExtendUntil = { instant ->
+                viewModel.extendYouTubeRestrictLockUntil(instant)
+                showExtendYouTubeDialog = false
+            },
+            onDismiss = { showExtendYouTubeDialog = false }
+        )
+    }
+
+    // Extend Incognito Disabled Lock
+    val incognitoUnlockTime = incognitoDisabledState.unlockTime
+    if (showExtendIncognitoDialog && incognitoUnlockTime != null) {
+        ExtendLockDialog(
+            currentUnlockTime = incognitoUnlockTime,
+            onExtendByDuration = { duration ->
+                viewModel.extendIncognitoDisabledLockByDuration(duration)
+                showExtendIncognitoDialog = false
+            },
+            onExtendUntil = { instant ->
+                viewModel.extendIncognitoDisabledLockUntil(instant)
+                showExtendIncognitoDialog = false
+            },
+            onDismiss = { showExtendIncognitoDialog = false }
         )
     }
 }

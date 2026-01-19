@@ -160,6 +160,70 @@ class LockManager @Inject constructor(
     }
 
     /**
+     * Check if a lock can be extended (only TIMER and UNTIL_DATETIME modes).
+     */
+    suspend fun canExtendLock(blockId: Long): Boolean {
+        val lock = blockRepository.getLockForBlock(blockId) ?: return false
+        return when (lock.mode) {
+            LockMode.TIMER, LockMode.UNTIL_DATETIME -> {
+                val unlockTime = lock.unlockTime ?: return false
+                Instant.now().isBefore(unlockTime)
+            }
+            else -> false
+        }
+    }
+
+    /**
+     * Extend an existing lock by a duration.
+     * Only works for TIMER and UNTIL_DATETIME modes.
+     */
+    suspend fun extendLockByDuration(blockId: Long, additionalDuration: Duration): Result<Unit> {
+        val lock = blockRepository.getLockForBlock(blockId)
+            ?: return Result.failure(LockException("No lock found for block"))
+
+        if (lock.mode != LockMode.TIMER && lock.mode != LockMode.UNTIL_DATETIME) {
+            return Result.failure(LockException("Only timer and until-datetime locks can be extended"))
+        }
+
+        if (additionalDuration.isNegative || additionalDuration.isZero) {
+            return Result.failure(LockException("Duration must be positive"))
+        }
+
+        val currentUnlockTime = lock.unlockTime ?: Instant.now()
+        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val newUnlockTime = baseTime.plus(additionalDuration)
+
+        blockRepository.setLock(blockId, lock.mode, newUnlockTime)
+        return Result.success(Unit)
+    }
+
+    /**
+     * Extend an existing lock until a new time.
+     * Only works for TIMER and UNTIL_DATETIME modes.
+     * New time must be later than current unlock time.
+     */
+    suspend fun extendLockUntil(blockId: Long, newUnlockTime: Instant): Result<Unit> {
+        val lock = blockRepository.getLockForBlock(blockId)
+            ?: return Result.failure(LockException("No lock found for block"))
+
+        if (lock.mode != LockMode.TIMER && lock.mode != LockMode.UNTIL_DATETIME) {
+            return Result.failure(LockException("Only timer and until-datetime locks can be extended"))
+        }
+
+        if (newUnlockTime.isBefore(Instant.now())) {
+            return Result.failure(LockException("New unlock time must be in the future"))
+        }
+
+        val currentUnlockTime = lock.unlockTime
+        if (currentUnlockTime != null && newUnlockTime.isBefore(currentUnlockTime)) {
+            return Result.failure(LockException("New unlock time must be later than current unlock time"))
+        }
+
+        blockRepository.setLock(blockId, lock.mode, newUnlockTime)
+        return Result.success(Unit)
+    }
+
+    /**
      * Get a human-readable description of the lock status.
      */
     fun getLockStatusDescription(lock: Lock?): String {

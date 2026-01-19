@@ -42,6 +42,8 @@ data class BlockEditUiState(
     val lock: Lock? = null,
     val isLocked: Boolean = false,
     val lockStatusText: String = "Not locked",
+    val canExtendLock: Boolean = false,
+    val currentUnlockTime: Instant? = null,
     val schedule: Schedule? = null,
     val scheduleStatusText: String = "No schedule",
     val isLoading: Boolean = true,
@@ -77,6 +79,7 @@ class BlockEditViewModel @Inject constructor(
             if (blockWithRules != null) {
                 val lock = blockRepository.getLockForBlock(blockId)
                 val isLocked = lockManager.isBlockLocked(blockId)
+                val canExtend = lockManager.canExtendLock(blockId)
                 val schedule = blockRepository.getScheduleForBlock(blockId)
                 val scheduleStatusText = scheduleManager.getScheduleStatusDescription(blockId)
                 _uiState.value = BlockEditUiState(
@@ -86,6 +89,8 @@ class BlockEditViewModel @Inject constructor(
                     lock = lock,
                     isLocked = isLocked,
                     lockStatusText = lockManager.getLockStatusDescription(lock),
+                    canExtendLock = canExtend,
+                    currentUnlockTime = lock?.unlockTime,
                     schedule = schedule,
                     scheduleStatusText = scheduleStatusText,
                     isLoading = false
@@ -108,12 +113,15 @@ class BlockEditViewModel @Inject constructor(
     private suspend fun refreshLockStatus() {
         val lock = blockRepository.getLockForBlock(blockId)
         val isLocked = lockManager.isBlockLocked(blockId)
+        val canExtend = lockManager.canExtendLock(blockId)
         val schedule = blockRepository.getScheduleForBlock(blockId)
         val scheduleStatusText = scheduleManager.getScheduleStatusDescription(blockId)
         _uiState.value = _uiState.value.copy(
             lock = lock,
             isLocked = isLocked,
             lockStatusText = lockManager.getLockStatusDescription(lock),
+            canExtendLock = canExtend,
+            currentUnlockTime = lock?.unlockTime,
             schedule = schedule,
             scheduleStatusText = scheduleStatusText
         )
@@ -244,6 +252,30 @@ class BlockEditViewModel @Inject constructor(
 
     fun clearLockError() {
         _uiState.value = _uiState.value.copy(lockError = null)
+    }
+
+    fun extendLockByDuration(duration: Duration) {
+        viewModelScope.launch {
+            val result = lockManager.extendLockByDuration(blockId, duration)
+            result.onSuccess {
+                refreshLockStatus()
+                _uiState.value = _uiState.value.copy(lockError = null)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(lockError = e.message)
+            }
+        }
+    }
+
+    fun extendLockUntil(newUnlockTime: Instant) {
+        viewModelScope.launch {
+            val result = lockManager.extendLockUntil(blockId, newUnlockTime)
+            result.onSuccess {
+                refreshLockStatus()
+                _uiState.value = _uiState.value.copy(lockError = null)
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(lockError = e.message)
+            }
+        }
     }
 
     // Schedule operations
