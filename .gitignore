@@ -17,3 +17,7 @@ local.properties
 keystore.properties
 *.keystore
 *.jks
+
+# dev files
+ISSUES.md
+*plan.md
