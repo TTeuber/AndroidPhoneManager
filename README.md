@@ -175,17 +175,6 @@ When adding entities or modifying the schema:
 
 The app uses a signing config from `keystore.properties` for both debug and release builds to maintain Device Owner status across rebuilds.
 
-## Implementation Status
-
-- [x] Block creation and management
-- [x] App blocking via Device Owner APIs
-- [x] Schedule system with background workers
-- [x] Lock system with expiration
-- [x] Custom browser with URL blocking and QR scanner
-- [ ] Complete app installation control with Play Store parsing
-- [ ] Security hardening
-- [ ] Comprehensive testing
-
 ## Known Limitations
 
 - Requires Device Owner status (factory reset needed to set up)
