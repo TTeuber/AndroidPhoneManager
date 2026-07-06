@@ -9,10 +9,13 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-// Load keystore properties
+// Load keystore properties. The custom keystore keeps a consistent signature across
+// rebuilds so Device Owner status survives reinstalls. When it is absent (e.g. CI),
+// builds fall back to the default debug signing config.
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
+val hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
@@ -30,18 +33,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("../${keystoreProperties["storeFile"] ?: "selfcontrol.keystore"}")
-            storePassword = keystoreProperties["storePassword"] as String? ?: ""
-            keyAlias = keystoreProperties["keyAlias"] as String? ?: "selfcontrol"
-            keyPassword = keystoreProperties["keyPassword"] as String? ?: ""
+    if (hasKeystore) {
+        signingConfigs {
+            create("release") {
+                storeFile = file("../${keystoreProperties["storeFile"] ?: "selfcontrol.keystore"}")
+                storePassword = keystoreProperties["storePassword"] as String? ?: ""
+                keyAlias = keystoreProperties["keyAlias"] as String? ?: "selfcontrol"
+                keyPassword = keystoreProperties["keyPassword"] as String? ?: ""
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         release {
             isMinifyEnabled = false
@@ -49,7 +56,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
