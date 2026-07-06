@@ -80,27 +80,31 @@ class PlayStoreParser @Inject constructor() {
                 .followRedirects(true)
                 .get()
 
-            val appName = parseAppName(doc)
-            val rawCategory = parseCategory(doc)
-            val isGame = detectGame(doc)
-            val isBrowser = detectBrowser(appName)
-
-            val category = categorize(rawCategory, isGame, isBrowser)
-
-            Result.success(
-                ParsedAppInfo(
-                    packageName = packageName,
-                    appName = appName,
-                    category = category,
-                    isGame = isGame,
-                    isBrowser = isBrowser,
-                    rawCategory = rawCategory
-                )
-            )
+            Result.success(parseDocument(doc, packageName))
         } catch (e: Exception) {
             // Default to requiring cooldown if parsing fails (fail-safe)
             Result.failure(PlayStoreParseException("Failed to parse Play Store page: ${e.message}", e))
         }
+    }
+
+    /**
+     * Extract app information from an already-fetched Play Store page.
+     * Separated from [parsePlayStoreUrl] so parsing logic can be tested without network access.
+     */
+    fun parseDocument(doc: Document, packageName: String): ParsedAppInfo {
+        val appName = parseAppName(doc)
+        val rawCategory = parseCategory(doc)
+        val isGame = detectGame(doc)
+        val isBrowser = detectBrowser(appName)
+
+        return ParsedAppInfo(
+            packageName = packageName,
+            appName = appName,
+            category = categorize(rawCategory, isGame, isBrowser),
+            isGame = isGame,
+            isBrowser = isBrowser,
+            rawCategory = rawCategory
+        )
     }
 
     /**
