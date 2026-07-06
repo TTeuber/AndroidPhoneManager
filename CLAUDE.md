@@ -78,7 +78,7 @@ data/repository/
 domain/
   LockManager.kt           - Lock enforcement logic
   ScheduleManager.kt       - Schedule evaluation logic
-  UrlBlocker.kt            - URL matching and blocking logic for browser
+  ContentRestrictionManager.kt - Chrome managed configurations (URL blocklist, SafeSearch, incognito)
   AppInstallationManager.kt - App installation evaluation and cooldown management
   PlayStoreParser.kt       - Parses Play Store pages to detect app categories
 ```
@@ -112,11 +112,6 @@ ui/viewmodel/
   MainViewModel.kt     - Block list operations
   BlockEditViewModel.kt - Block editing operations
   SettingsViewModel.kt  - Settings + worker scheduling
-
-ui/browser/
-  BrowserActivity.kt        - Utility browser with QR scanner
-  BlockingWebViewClient.kt  - WebViewClient with URL blocking
-  QrScannerView.kt          - CameraX + ML Kit barcode scanner
 ```
 
 ## Device Owner Setup
@@ -156,13 +151,17 @@ The app uses `DevicePolicyManager.setPackagesSuspended()` for blocking.
 
 The service uses `DevicePolicyManager.setPackagesSuspended()` to suspend blocked apps and monitors the foreground app every second to immediately block attempts to open suspended apps.
 
-## Build
+## Build & Test
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug        # build
+./gradlew testDebugUnitTest    # unit tests (domain logic: schedules, locks, parsing)
+./gradlew lintDebug            # lint
 ```
 
-Uses signing config from `keystore.properties` (even for debug builds to maintain device owner status).
+Uses signing config from `keystore.properties` (even for debug builds to maintain device owner status). When `keystore.properties` is absent (e.g. CI), builds fall back to default debug signing.
+
+Unit tests live in `app/src/test/` mirroring the source packages (`domain/`, `data/model/`). CI (`.github/workflows/android.yml`) runs tests, lint, and assembleDebug on every push.
 
 ## Implementation Status
 
@@ -171,7 +170,7 @@ Uses signing config from `keystore.properties` (even for debug builds to maintai
 - [x] Phase 3: App Blocking Core
 - [x] Phase 4: Lock System
 - [x] Phase 5: Schedule System
-- [x] Phase 6: Custom WebView Browser (ML Kit QR, URL blocking)
+- [x] Phase 6: Website Blocking via Chrome managed configurations (URL blocklist, SafeSearch, incognito disabled)
 - [ ] Phase 7: App Installation Control (Play Store parsing, cooldown)
 - [ ] Phase 8: Security Hardening
 - [ ] Phase 9: Polish & Testing
