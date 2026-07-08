@@ -1,0 +1,28 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ImplicitDefaultLocale:Schedule.kt$Schedule$String.format("%02d:%02d - %02d:%02d", startTime.hour, startTime.minute, endTime.hour, endTime.minute )</ID>
+    <ID>LongMethod:AppBlockingService.kt$AppBlockingService$private fun observeBlockedPackages()</ID>
+    <ID>LongMethod:ContentRestrictionManager.kt$ContentRestrictionManager$suspend fun updateChromeRestrictions()</ID>
+    <ID>NestedBlockDepth:AppBlockingService.kt$AppBlockingService$private fun setPackagesSuspended(packages: Array&lt;String&gt;, suspended: Boolean)</ID>
+    <ID>SwallowedException:AppBlockingService.kt$AppBlockingService$e: Exception</ID>
+    <ID>SwallowedException:BlockEditViewModel.kt$BlockEditViewModel$e: Exception</ID>
+    <ID>SwallowedException:ContentRestrictionManager.kt$ContentRestrictionManager$e: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:CooldownExpirationWorker.kt$CooldownExpirationWorker$e: Exception</ID>
+    <ID>SwallowedException:CooldownNotificationWorker.kt$CooldownNotificationWorker$e: Exception</ID>
+    <ID>SwallowedException:ScheduleWorker.kt$ScheduleWorker$e: Exception</ID>
+    <ID>SwallowedException:SettingsDataStore.kt$SettingsDataStore$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:UnlockWorker.kt$UnlockWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppBlockingService.kt$AppBlockingService$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppInstallationManager.kt$AppInstallationManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppInstallationViewModel.kt$AppInstallationViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BlockEditViewModel.kt$BlockEditViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ContentRestrictionManager.kt$ContentRestrictionManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CooldownExpirationWorker.kt$CooldownExpirationWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CooldownNotificationWorker.kt$CooldownNotificationWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PlayStoreParser.kt$PlayStoreParser$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ScheduleWorker.kt$ScheduleWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:UnlockWorker.kt$UnlockWorker$e: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>

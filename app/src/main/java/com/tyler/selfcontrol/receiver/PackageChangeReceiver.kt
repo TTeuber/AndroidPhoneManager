@@ -33,7 +33,7 @@ class PackageChangeReceiver : BroadcastReceiver() {
             }
             Intent.ACTION_PACKAGE_FULLY_REMOVED -> {
                 Log.d(TAG, "Package removed: $packageName")
-                handlePackageRemoved(context, packageName)
+                handlePackageRemoved(packageName)
             }
         }
     }
@@ -47,7 +47,7 @@ class PackageChangeReceiver : BroadcastReceiver() {
         AppBlockingService.updateBlocks(context)
     }
 
-    private fun handlePackageRemoved(context: Context, packageName: String) {
+    private fun handlePackageRemoved(packageName: String) {
         Log.d(TAG, "handlePackageRemoved: $packageName")
         // Currently we don't remove apps from the allowlist when uninstalled
         // This allows the user to reinstall without going through cooldown again

@@ -35,6 +35,9 @@ interface ScheduleDao {
     @Query("DELETE FROM schedules WHERE blockId = :blockId")
     suspend fun deleteForBlock(blockId: Long)
 
-    @Query("UPDATE schedules SET daysOfWeek = :daysOfWeek, startTimeMinutes = :startTime, endTimeMinutes = :endTime WHERE blockId = :blockId")
+    @Query(
+        "UPDATE schedules SET daysOfWeek = :daysOfWeek, startTimeMinutes = :startTime, " +
+            "endTimeMinutes = :endTime WHERE blockId = :blockId"
+    )
     suspend fun updateSchedule(blockId: Long, daysOfWeek: Int, startTime: Int, endTime: Int)
 }

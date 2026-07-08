@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.detekt)
 }
 
 // Load keystore properties. The custom keystore keeps a consistent signature across
@@ -71,6 +72,15 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+    // Known findings in pre-detekt code (broad exception handling in the
+    // service/workers, two long methods). New code must be clean; burn these
+    // down over time and regenerate with ./gradlew detektBaseline.
+    baseline = file("detekt-baseline.xml")
 }
 
 dependencies {

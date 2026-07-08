@@ -67,12 +67,15 @@ data class Schedule(
             }
         }
 
+        private const val MINUTES_PER_HOUR = 60
+        private const val DAY_ABBREVIATION_LENGTH = 3
+
         fun localTimeToMinutes(time: LocalTime): Int {
-            return time.hour * 60 + time.minute
+            return time.hour * MINUTES_PER_HOUR + time.minute
         }
 
         fun minutesToLocalTime(minutes: Int): LocalTime {
-            return LocalTime.of(minutes / 60, minutes % 60)
+            return LocalTime.of(minutes / MINUTES_PER_HOUR, minutes % MINUTES_PER_HOUR)
         }
     }
 
@@ -108,7 +111,9 @@ data class Schedule(
             daysOfWeek == ALL_DAYS -> "Every day"
             daysOfWeek == WEEKDAYS -> "Weekdays"
             daysOfWeek == WEEKENDS -> "Weekends"
-            else -> days.joinToString(", ") { it.name.take(3).lowercase().replaceFirstChar { c -> c.uppercase() } }
+            else -> days.joinToString(", ") {
+                it.name.take(DAY_ABBREVIATION_LENGTH).lowercase().replaceFirstChar { c -> c.uppercase() }
+            }
         }
 
         val startTime = getStartTime()

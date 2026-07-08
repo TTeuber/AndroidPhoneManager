@@ -6,8 +6,7 @@ import com.tyler.selfcontrol.data.model.Schedule
 import com.tyler.selfcontrol.data.repository.BlockRepository
 import java.time.DayOfWeek
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,7 +32,7 @@ class ScheduleManager @Inject constructor(
      */
     fun isScheduleActive(schedule: Schedule, now: LocalDateTime = LocalDateTime.now()): Boolean {
         val currentDay = now.dayOfWeek
-        val currentTimeMinutes = now.hour * 60 + now.minute
+        val currentTimeMinutes = Schedule.localTimeToMinutes(now.toLocalTime())
 
         // Check if today is enabled in the schedule
         val dayBit = Schedule.fromDayOfWeek(currentDay)
@@ -79,8 +78,8 @@ class ScheduleManager @Inject constructor(
         var changedCount = 0
 
         for (schedule in activeSchedules) {
-            val block = blockRepository.getBlockById(schedule.blockId) ?: continue
-            if (block.state != BlockState.SCHEDULED) continue
+            val block = blockRepository.getBlockById(schedule.blockId)
+            if (block == null || block.state != BlockState.SCHEDULED) continue
 
             val shouldBeActive = isScheduleActive(schedule)
             if (block.isScheduleActive != shouldBeActive) {
@@ -102,47 +101,28 @@ class ScheduleManager @Inject constructor(
     fun getNextStateChangeTime(schedule: Schedule, now: LocalDateTime = LocalDateTime.now()): LocalDateTime? {
         if (schedule.daysOfWeek == 0) return null
 
-        val currentTimeMinutes = now.hour * 60 + now.minute
+        val currentTimeMinutes = Schedule.localTimeToMinutes(now.toLocalTime())
         val isActive = isScheduleActive(schedule, now)
 
-        // Look up to 7 days ahead
-        for (dayOffset in 0..7) {
+        // Look up to a week ahead. The same logic covers overnight and normal
+        // schedules: both activate at startTime and deactivate at endTime.
+        for (dayOffset in 0..DAYS_PER_WEEK) {
             val checkDate = now.toLocalDate().plusDays(dayOffset.toLong())
-            val checkDay = checkDate.dayOfWeek
-            val dayBit = Schedule.fromDayOfWeek(checkDay)
+            val dayBit = Schedule.fromDayOfWeek(checkDate.dayOfWeek)
 
             if (!schedule.isDayEnabled(dayBit)) continue
 
-            if (schedule.isOvernightSchedule()) {
-                // Overnight schedule logic
-                if (dayOffset == 0) {
-                    // Today
-                    if (!isActive && currentTimeMinutes < schedule.startTimeMinutes) {
-                        // Will activate at start time today
-                        return checkDate.atTime(Schedule.minutesToLocalTime(schedule.startTimeMinutes))
-                    }
-                    if (isActive && currentTimeMinutes < schedule.endTimeMinutes) {
-                        // Will deactivate at end time today (from yesterday's start)
-                        return checkDate.atTime(Schedule.minutesToLocalTime(schedule.endTimeMinutes))
-                    }
-                } else {
-                    // Future day - schedule will start at startTime
-                    return checkDate.atTime(Schedule.minutesToLocalTime(schedule.startTimeMinutes))
-                }
-            } else {
-                // Normal schedule logic
-                if (dayOffset == 0) {
-                    // Today
-                    if (!isActive && currentTimeMinutes < schedule.startTimeMinutes) {
-                        return checkDate.atTime(Schedule.minutesToLocalTime(schedule.startTimeMinutes))
-                    }
-                    if (isActive && currentTimeMinutes < schedule.endTimeMinutes) {
-                        return checkDate.atTime(Schedule.minutesToLocalTime(schedule.endTimeMinutes))
-                    }
-                } else {
-                    // Future day - schedule will start at startTime
-                    return checkDate.atTime(Schedule.minutesToLocalTime(schedule.startTimeMinutes))
-                }
+            val changeMinutes = when {
+                // Future day - schedule will start at startTime
+                dayOffset > 0 -> schedule.startTimeMinutes
+                // Today - will activate at start time
+                !isActive && currentTimeMinutes < schedule.startTimeMinutes -> schedule.startTimeMinutes
+                // Today - will deactivate at end time
+                isActive && currentTimeMinutes < schedule.endTimeMinutes -> schedule.endTimeMinutes
+                else -> null
+            }
+            if (changeMinutes != null) {
+                return checkDate.atTime(Schedule.minutesToLocalTime(changeMinutes))
             }
         }
 
@@ -185,14 +165,18 @@ class ScheduleManager @Inject constructor(
         val dayPart = when {
             isToday -> "today"
             isTomorrow -> "tomorrow"
-            else -> dateTime.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            else -> dateTime.dayOfWeek.name.take(DAY_ABBREVIATION_LENGTH)
+                .lowercase().replaceFirstChar { it.uppercase() }
         }
 
-        return "$dayPart at ${String.format("%02d:%02d", dateTime.hour, dateTime.minute)}"
+        return "$dayPart at ${String.format(Locale.US, "%02d:%02d", dateTime.hour, dateTime.minute)}"
     }
 }
 
+private const val DAYS_PER_WEEK = 7
+private const val DAY_ABBREVIATION_LENGTH = 3
+
 private fun DayOfWeek.minus(days: Long): DayOfWeek {
-    val adjusted = (this.value - days % 7 + 7) % 7
-    return DayOfWeek.of(if (adjusted == 0L) 7 else adjusted.toInt())
+    val adjusted = (this.value - days % DAYS_PER_WEEK + DAYS_PER_WEEK) % DAYS_PER_WEEK
+    return DayOfWeek.of(if (adjusted == 0L) DAYS_PER_WEEK else adjusted.toInt())
 }

@@ -28,7 +28,6 @@ import com.tyler.selfcontrol.util.UsageStatsHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -58,7 +57,6 @@ class AppBlockingService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val handler = Handler(Looper.getMainLooper())
-    private var monitoringJob: Job? = null
 
     private var blockedPackages = setOf<String>()
     private var isMonitoring = false
@@ -112,7 +110,10 @@ class AppBlockingService : Service() {
                         updateSuspendedApps()
 
                         // If Chrome was installed, apply URL restrictions to it
-                        if (packageName in listOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary")) {
+                        val chromePackages = listOf(
+                            "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary"
+                        )
+                        if (packageName in chromePackages) {
                             Log.d(TAG, "Chrome installed/updated: $packageName - applying URL restrictions")
                             contentRestrictionManager.updateChromeRestrictions()
                         }
@@ -152,7 +153,7 @@ class AppBlockingService : Service() {
         // Retry suspension after a delay to handle device owner setup timing
         // This catches cases where the service starts before device owner is set
         serviceScope.launch {
-            delay(3000) // Wait for device owner to potentially be set
+            delay(DEVICE_OWNER_RETRY_DELAY_MS)
             if (blockedPackages.isNotEmpty()) {
                 Log.d(TAG, "Startup retry: attempting to suspend ${blockedPackages.size} blocked packages")
                 retryFailedSuspensions()
@@ -169,7 +170,7 @@ class AppBlockingService : Service() {
                 Log.d(TAG, "ACTION_UPDATE_BLOCKS received, refreshing installed packages")
                 // Add a small delay to ensure the system has registered the new package
                 serviceScope.launch {
-                    delay(500) // Give system time to register the package
+                    delay(PACKAGE_REGISTRATION_DELAY_MS)
                     installedPackagesFlow.value = getInstalledPackages()
                     updateSuspendedApps()
                 }
@@ -246,13 +247,21 @@ class AppBlockingService : Service() {
                 val youtubePackage = "com.google.android.youtube"
                 val shouldBlockYouTube = youtubeRestrictState.value != YouTubeRestrictLevel.OFF || incognitoDisabledState.value
                 val fromContentRestrictions = if (shouldBlockYouTube && allInstalledPackages.contains(youtubePackage)) {
-                    Log.d(TAG, "Blocking YouTube app due to content restrictions (Restrict=${youtubeRestrictState.value}, IncognitoDisabled=${incognitoDisabledState.value})")
+                    Log.d(
+                        TAG,
+                        "Blocking YouTube app due to content restrictions " +
+                            "(Restrict=${youtubeRestrictState.value}, IncognitoDisabled=${incognitoDisabledState.value})"
+                    )
                     setOf(youtubePackage)
                 } else {
                     emptySet()
                 }
 
-                Log.d(TAG, "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, Not on allowlist: ${notOnAllowlist.size}, Content restrictions: ${fromContentRestrictions.size}")
+                Log.d(
+                    TAG,
+                    "Block rules: ${fromBlockRules.size}, Blacklist: ${fromBlacklist.size}, " +
+                        "Not on allowlist: ${notOnAllowlist.size}, Content restrictions: ${fromContentRestrictions.size}"
+                )
 
                 // Combine all sources
                 fromBlockRules + fromBlacklist + notOnAllowlist + fromContentRestrictions
@@ -314,7 +323,11 @@ class AppBlockingService : Service() {
             ) { safeSearch, youtubeRestrict, incognitoDisabled ->
                 Triple(safeSearch, youtubeRestrict, incognitoDisabled)
             }.collectLatest { (safeSearch, youtubeRestrict, incognitoDisabled) ->
-                Log.d(TAG, "Content restriction settings changed: SafeSearch=${safeSearch.value}, YouTubeRestrict=${youtubeRestrict.value}, IncognitoDisabled=${incognitoDisabled.value}")
+                Log.d(
+                    TAG,
+                    "Content restriction settings changed: SafeSearch=${safeSearch.value}, " +
+                        "YouTubeRestrict=${youtubeRestrict.value}, IncognitoDisabled=${incognitoDisabled.value}"
+                )
                 contentRestrictionManager.updateAllRestrictions()
             }
         }
@@ -411,7 +424,11 @@ class AppBlockingService : Service() {
                     suspended
                 )
                 if (failedPackages.isNotEmpty()) {
-                    Log.w(TAG, "Failed to ${if (suspended) "suspend" else "unsuspend"} these packages: ${failedPackages.toList()}")
+                    Log.w(
+                        TAG,
+                        "Failed to ${if (suspended) "suspend" else "unsuspend"} these packages: " +
+                            failedPackages.toList().toString()
+                    )
                     // Track failed packages for retry (only when suspending)
                     if (suspended) {
                         packagesNeedingRetry = packagesNeedingRetry + failedPackages.toSet()
@@ -557,6 +574,8 @@ class AppBlockingService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val CHECK_INTERVAL_MS = 1000L // Check every second
         private const val RETRY_INTERVAL_MS = 5000L // Retry failed suspensions every 5 seconds
+        private const val DEVICE_OWNER_RETRY_DELAY_MS = 3000L // Wait for device owner to potentially be set
+        private const val PACKAGE_REGISTRATION_DELAY_MS = 500L // Give system time to register a new package
 
         const val ACTION_START_MONITORING = "com.tyler.selfcontrol.START_MONITORING"
         const val ACTION_STOP_MONITORING = "com.tyler.selfcontrol.STOP_MONITORING"

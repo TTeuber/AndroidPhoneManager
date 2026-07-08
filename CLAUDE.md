@@ -157,11 +157,12 @@ The service uses `DevicePolicyManager.setPackagesSuspended()` to suspend blocked
 ./gradlew assembleDebug        # build
 ./gradlew testDebugUnitTest    # unit tests (domain logic: schedules, locks, parsing)
 ./gradlew lintDebug            # lint
+./gradlew detekt               # static analysis (config/detekt/detekt.yml; legacy findings in app/detekt-baseline.xml)
 ```
 
 Uses signing config from `keystore.properties` (even for debug builds to maintain device owner status). When `keystore.properties` is absent (e.g. CI), builds fall back to default debug signing.
 
-Unit tests live in `app/src/test/` mirroring the source packages (`domain/`, `data/model/`). CI (`.github/workflows/android.yml`) runs tests, lint, and assembleDebug on every push.
+Unit tests live in `app/src/test/` mirroring the source packages (`domain/`, `data/model/`). CI (`.github/workflows/android.yml`) runs detekt, tests, lint, and assembleDebug on every push.
 
 ## Implementation Status
 

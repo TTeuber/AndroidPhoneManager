@@ -37,6 +37,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Locale
 
 /**
  * Dialog for extending an existing lock.
@@ -181,7 +182,7 @@ fun ExtendLockDialog(
                             onClick = { showTimePicker = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(String.format("%02d:%02d", selectedTime.hour, selectedTime.minute))
+                            Text(String.format(Locale.US, "%02d:%02d", selectedTime.hour, selectedTime.minute))
                         }
 
                         // Show error message if present

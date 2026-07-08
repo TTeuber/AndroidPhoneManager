@@ -94,6 +94,8 @@ class CooldownNotificationWorker @AssistedInject constructor(
     }
 
     companion object {
+        private const val DEV_INTERVAL_MINUTES = 1L
+        private const val DEFAULT_INTERVAL_MINUTES = 15L
         private const val WORK_NAME = "cooldown_notification_worker"
         private const val CHANNEL_ID = "cooldown_channel"
         private const val NOTIFICATION_TAG = "cooldown_notification"
@@ -104,7 +106,7 @@ class CooldownNotificationWorker @AssistedInject constructor(
          * @param devMode If true, runs every 1 minute for testing. Otherwise runs every 15 minutes.
          */
         fun schedule(context: Context, devMode: Boolean = false) {
-            val interval = if (devMode) 1L else 15L
+            val interval = if (devMode) DEV_INTERVAL_MINUTES else DEFAULT_INTERVAL_MINUTES
             val timeUnit = TimeUnit.MINUTES
 
             val workRequest = PeriodicWorkRequestBuilder<CooldownNotificationWorker>(

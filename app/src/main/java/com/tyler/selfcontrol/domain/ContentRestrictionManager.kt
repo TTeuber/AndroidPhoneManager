@@ -99,7 +99,11 @@ class ContentRestrictionManager @Inject constructor(
                 val incognitoDisabledState = settingsDataStore.incognitoDisabledStateFlow.first()
 
                 Log.d(TAG, "Applying Chrome restrictions: ${blockList.size} blocked, ${allowList.size} allowed")
-                Log.d(TAG, "SafeSearch: ${safeSearchState.value}, YouTubeRestrict: ${youtubeRestrictState.value}, IncognitoDisabled: ${incognitoDisabledState.value}")
+                Log.d(
+                    TAG,
+                    "SafeSearch: ${safeSearchState.value}, YouTubeRestrict: ${youtubeRestrictState.value}, " +
+                        "IncognitoDisabled: ${incognitoDisabledState.value}"
+                )
 
                 val restrictions = Bundle().apply {
                     // URL blocking

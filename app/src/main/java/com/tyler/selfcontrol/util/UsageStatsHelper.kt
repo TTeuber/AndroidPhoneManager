@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val RECENT_USAGE_WINDOW_MS = 10_000L // Look at the last 10 seconds
+
 @Singleton
 class UsageStatsHelper @Inject constructor(
     @ApplicationContext private val context: Context
@@ -32,7 +34,7 @@ class UsageStatsHelper @Inject constructor(
         }
 
         val endTime = System.currentTimeMillis()
-        val beginTime = endTime - 10_000 // Look at last 10 seconds
+        val beginTime = endTime - RECENT_USAGE_WINDOW_MS
 
         val usageEvents = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,

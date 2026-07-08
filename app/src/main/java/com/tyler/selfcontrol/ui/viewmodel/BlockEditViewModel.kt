@@ -50,6 +50,8 @@ data class BlockEditUiState(
     val lockError: String? = null
 )
 
+private const val LOCK_STATUS_REFRESH_INTERVAL_MS = 60_000L // Update every minute
+
 @HiltViewModel
 class BlockEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -104,7 +106,7 @@ class BlockEditViewModel @Inject constructor(
     private fun startLockStatusUpdater() {
         viewModelScope.launch {
             while (isActive) {
-                delay(60_000) // Update every minute
+                delay(LOCK_STATUS_REFRESH_INTERVAL_MS)
                 refreshLockStatus()
             }
         }

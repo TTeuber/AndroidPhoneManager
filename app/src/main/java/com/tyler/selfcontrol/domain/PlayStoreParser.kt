@@ -22,7 +22,8 @@ class PlayStoreParser @Inject constructor() {
 
     companion object {
         private const val TIMEOUT_MS = 15_000
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
         // Restricted categories that require cooldown
         private val RESTRICTED_CATEGORIES = setOf(
@@ -68,10 +69,12 @@ class PlayStoreParser @Inject constructor() {
         try {
             // Extract package name from URL
             val packageName = extractPackageName(url)
-                ?: return@withContext Result.failure(PlayStoreParseException("Invalid Play Store URL: could not extract package name"))
+                ?: return@withContext Result.failure(
+                    PlayStoreParseException("Invalid Play Store URL: could not extract package name")
+                )
 
             // Normalize URL to include English locale
-            val normalizedUrl = normalizeUrl(url, packageName)
+            val normalizedUrl = normalizeUrl(packageName)
 
             // Fetch and parse page
             val doc = Jsoup.connect(normalizedUrl)
@@ -123,7 +126,7 @@ class PlayStoreParser @Inject constructor() {
     /**
      * Normalize the URL to ensure we get the English version of the page.
      */
-    private fun normalizeUrl(url: String, packageName: String): String {
+    private fun normalizeUrl(packageName: String): String {
         return "https://play.google.com/store/apps/details?id=$packageName&hl=en-US"
     }
 

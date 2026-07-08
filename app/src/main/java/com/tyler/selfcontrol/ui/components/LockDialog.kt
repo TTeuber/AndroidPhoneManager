@@ -41,6 +41,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Locale
 
 /**
  * Reusable lock dialog component with Timer, Until, and Forever modes.
@@ -180,7 +181,7 @@ fun LockDialog(
                             onClick = { showTimePicker = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(String.format("%02d:%02d", selectedTime.hour, selectedTime.minute))
+                            Text(String.format(Locale.US, "%02d:%02d", selectedTime.hour, selectedTime.minute))
                         }
 
                         // Show error message if present
@@ -212,7 +213,8 @@ fun LockDialog(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "This will permanently lock this block. You will not be able to remove blocked items or disable the block.",
+                            text = "This will permanently lock this block. " +
+                                "You will not be able to remove blocked items or disable the block.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

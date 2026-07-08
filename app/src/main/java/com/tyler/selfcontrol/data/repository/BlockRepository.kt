@@ -73,7 +73,8 @@ class BlockRepository @Inject constructor(
     // Website rule operations
     fun getWebsiteRulesForBlock(blockId: Long): Flow<List<WebsiteRule>> = websiteRuleDao.getWebsiteRulesForBlock(blockId)
 
-    suspend fun getWebsiteRulesForBlockOnce(blockId: Long): List<WebsiteRule> = websiteRuleDao.getWebsiteRulesForBlockOnce(blockId)
+    suspend fun getWebsiteRulesForBlockOnce(blockId: Long): List<WebsiteRule> =
+        websiteRuleDao.getWebsiteRulesForBlockOnce(blockId)
 
     fun getActiveWebsiteRules(): Flow<List<WebsiteRule>> = websiteRuleDao.getActiveWebsiteRules()
 

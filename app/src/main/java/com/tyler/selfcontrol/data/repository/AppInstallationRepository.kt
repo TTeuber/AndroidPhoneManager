@@ -134,7 +134,11 @@ class AppInstallationRepository @Inject constructor(
             BlacklistedApp(packageName = "com.laurencedawson.reddit_sync", appName = "Sync for Reddit", reason = "Reddit client"),
             BlacklistedApp(packageName = "com.andrewshu.android.reddit", appName = "Reddit is Fun", reason = "Reddit client"),
             BlacklistedApp(packageName = "com.rubenmayayo.reddit", appName = "Boost for Reddit", reason = "Reddit client"),
-            BlacklistedApp(packageName = "ml.docilealligator.infinityforreddit", appName = "Infinity for Reddit", reason = "Reddit client"),
+            BlacklistedApp(
+                packageName = "ml.docilealligator.infinityforreddit",
+                appName = "Infinity for Reddit",
+                reason = "Reddit client"
+            ),
             BlacklistedApp(packageName = "free.reddit.news", appName = "Relay for Reddit", reason = "Reddit client"),
             BlacklistedApp(packageName = "tv.twitch.android.app", appName = "Twitch", reason = "Entertainment"),
             BlacklistedApp(packageName = "com.netflix.mediaclient", appName = "Netflix", reason = "Entertainment"),

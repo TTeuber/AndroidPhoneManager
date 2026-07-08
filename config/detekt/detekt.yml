@@ -1,0 +1,38 @@
+# Project overrides applied on top of detekt's default config
+# (buildUponDefaultConfig = true in app/build.gradle.kts).
+# Most tweaks below follow the official detekt guidance for Jetpack Compose:
+# https://detekt.dev/docs/introduction/compose
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention
+    ignoreAnnotated: ['Composable']
+
+complexity:
+  TooManyFunctions:
+    # DAOs, repositories, and DataStore wrappers are facades that legitimately
+    # aggregate many one-line delegating functions
+    active: false
+  LongMethod:
+    # Composable functions describe UI trees and routinely exceed the default
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    # Composables take state + event callbacks as individual parameters
+    ignoreAnnotated: ['Composable']
+  CyclomaticComplexMethod:
+    ignoreAnnotated: ['Composable']
+
+style:
+  ReturnCount:
+    # Guard-clause early returns are idiomatic Kotlin
+    max: 3
+    excludeGuardClauses: true
+  MagicNumber:
+    # dp/sp values and layout constants are self-describing in Compose
+    ignoreAnnotated: ['Composable']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Composable', 'Preview']
+  MaxLineLength:
+    maxLineLength: 130

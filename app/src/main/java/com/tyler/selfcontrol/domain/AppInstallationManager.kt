@@ -72,30 +72,21 @@ class AppInstallationManager @Inject constructor(
             return InstallationDecision.Error(error.message ?: "Failed to parse Play Store URL")
         }
 
-        // Check if blacklisted
-        if (repository.isBlacklisted(appInfo.packageName)) {
-            val blacklisted = repository.getBlacklistedAppsOnce()
-                .find { it.packageName == appInfo.packageName }
-            return InstallationDecision.Blacklisted(blacklisted?.reason)
-        }
-
-        // Check if already allowed
-        if (repository.isAllowed(appInfo.packageName)) {
-            return InstallationDecision.AlreadyAllowed(appInfo)
-        }
-
-        // Check for existing cooldown request
         val existingRequest = repository.getActiveRequestForPackage(appInfo.packageName)
-        if (existingRequest != null) {
-            return InstallationDecision.PendingCooldown(existingRequest)
-        }
 
-        // Determine if cooldown is required
-        return if (playStoreParser.requiresCooldown(appInfo.category)) {
-            val (windowStart, windowEnd) = calculateCooldownWindow()
-            InstallationDecision.RequiresCooldown(appInfo, windowStart, windowEnd)
-        } else {
-            InstallationDecision.Allowed(appInfo)
+        return when {
+            repository.isBlacklisted(appInfo.packageName) -> {
+                val blacklisted = repository.getBlacklistedAppsOnce()
+                    .find { it.packageName == appInfo.packageName }
+                InstallationDecision.Blacklisted(blacklisted?.reason)
+            }
+            repository.isAllowed(appInfo.packageName) -> InstallationDecision.AlreadyAllowed(appInfo)
+            existingRequest != null -> InstallationDecision.PendingCooldown(existingRequest)
+            playStoreParser.requiresCooldown(appInfo.category) -> {
+                val (windowStart, windowEnd) = calculateCooldownWindow()
+                InstallationDecision.RequiresCooldown(appInfo, windowStart, windowEnd)
+            }
+            else -> InstallationDecision.Allowed(appInfo)
         }
     }
 

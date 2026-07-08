@@ -113,19 +113,19 @@ class LockManager @Inject constructor(
         val lock = blockRepository.getLockForBlock(blockId)
             ?: return Result.success(Unit)
 
-        when (lock.mode) {
-            LockMode.UNLOCKED -> return Result.success(Unit)
-            LockMode.FOREVER -> return Result.failure(LockException("Forever locks cannot be manually unlocked"))
+        return when (lock.mode) {
+            LockMode.UNLOCKED -> Result.success(Unit)
+            LockMode.FOREVER -> Result.failure(LockException("Forever locks cannot be manually unlocked"))
             LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
                 val unlockTime = lock.unlockTime
                 if (unlockTime != null && now().isBefore(unlockTime)) {
-                    return Result.failure(LockException("Lock has not expired yet"))
+                    Result.failure(LockException("Lock has not expired yet"))
+                } else {
+                    blockRepository.unlock(blockId)
+                    Result.success(Unit)
                 }
             }
         }
-
-        blockRepository.unlock(blockId)
-        return Result.success(Unit)
     }
 
     /**
@@ -260,11 +260,15 @@ class LockManager @Inject constructor(
     }
 
     companion object {
+        private const val SECONDS_PER_MINUTE = 60L
+        private const val SECONDS_PER_HOUR = 3600L
+        private const val SECONDS_PER_DAY = 86400L
+
         fun formatDuration(duration: Duration): String {
             val totalSeconds = duration.seconds
-            val days = totalSeconds / 86400
-            val hours = (totalSeconds % 86400) / 3600
-            val minutes = (totalSeconds % 3600) / 60
+            val days = totalSeconds / SECONDS_PER_DAY
+            val hours = (totalSeconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR
+            val minutes = (totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
 
             return buildString {
                 if (days > 0) append("${days}d ")

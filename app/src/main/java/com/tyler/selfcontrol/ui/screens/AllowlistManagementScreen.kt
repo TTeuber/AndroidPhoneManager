@@ -338,7 +338,12 @@ private fun AllowedAppCard(
         AlertDialog(
             onDismissRequest = { showRemoveDialog = false },
             title = { Text("Remove from Allowlist") },
-            text = { Text("Remove \"${app.appName}\" from the allowlist? You'll need to go through the approval process again to reinstall it.") },
+            text = {
+                Text(
+                    "Remove \"${app.appName}\" from the allowlist? " +
+                        "You'll need to go through the approval process again to reinstall it."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     onRemove()
