@@ -20,15 +20,21 @@ architecture diagram), CI-friendly signing fallback, dependency catalog cleanup.
 
 ## Code quality
 
-- [ ] **Split the largest composables.** `BlockEditScreen.kt` (~1,080 lines) and
-      `SettingsScreen.kt` (~740 lines) should be broken into focused components under
-      `ui/components/`. Good interview talking point about refactoring discipline.
-- [ ] **Add static analysis** (detekt or ktlint) and wire it into the CI workflow.
-- [ ] **Fix the deprecation warning** in `SettingsScreen.kt:731`
-      (`clearDeviceOwnerApp` is deprecated).
-- [ ] **Inject a `Clock`/time source into `LockManager`** instead of calling
-      `Instant.now()` directly, so expiry edge cases can be tested deterministically
-      (ScheduleManager already takes `now` as a parameter — mirror that pattern).
+- [x] **Split the largest composables.** `BlockEditScreen.kt` (1,078 → 372 lines) and
+      `SettingsScreen.kt` (738 → 258 lines) broken into focused components under
+      `ui/components/` (rule cards, schedule card, lock status card, pickers/dialogs,
+      and a reusable `LockDialogState` + `LockSettingDialogs` pair that deduplicates
+      the four lock/forever/extend dialog trios in Settings).
+- [x] **Add static analysis** — detekt with a Compose-aware config
+      (`config/detekt/detekt.yml`), wired into CI before the test step. Pre-existing
+      broad exception handling in the service/workers is captured in
+      `app/detekt-baseline.xml` to burn down over time; new code must be clean.
+- [x] **Fix the deprecation warning** for `clearDeviceOwnerApp` — suppressed with a
+      rationale comment: the suggested replacement (`wipeData()`/factory reset) is
+      wrong for this feature, and no non-destructive replacement exists.
+- [x] **Inject a `Clock`/time source into `LockManager`** (provided via Hilt
+      `ClockModule`); `LockManagerTest` now uses `Clock.fixed(...)` with deterministic
+      expiry edge-case tests (expiry exactly at now, 1 ms before expiry).
 
 ## Testing
 
