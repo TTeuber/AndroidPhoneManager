@@ -1,7 +1,6 @@
 package com.tyler.selfcontrol.ui.screens
 
 import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -55,7 +54,6 @@ import com.tyler.selfcontrol.data.datastore.SettingsDataStore
 import com.tyler.selfcontrol.data.datastore.YouTubeRestrictLevel
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.domain.LockManager
-import com.tyler.selfcontrol.receiver.SelfControlDeviceAdminReceiver
 import com.tyler.selfcontrol.ui.components.ExtendLockDialog
 import com.tyler.selfcontrol.ui.components.LockDialog
 import com.tyler.selfcontrol.ui.components.LockableSettingCard
@@ -725,13 +723,16 @@ fun SettingsScreen(
 private fun clearDeviceOwner(context: Context) {
     try {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val componentName = ComponentName(context, SelfControlDeviceAdminReceiver::class.java)
 
         if (dpm.isDeviceOwnerApp(context.packageName)) {
+            // clearDeviceOwnerApp is deprecated in favor of wipeData() (factory reset),
+            // but relinquishing device owner without wiping the device is exactly what
+            // this setting is for, and no non-destructive replacement exists.
+            @Suppress("DEPRECATION")
             dpm.clearDeviceOwnerApp(context.packageName)
             Toast.makeText(context, "Device owner cleared", Toast.LENGTH_SHORT).show()
         }
-    } catch (e: Exception) {
+    } catch (e: SecurityException) {
         Toast.makeText(context, "Failed to clear device owner: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
