@@ -13,17 +13,21 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 
 class LockManagerTest {
 
     private val repository = mockk<BlockRepository>()
-    private val manager = LockManager(repository)
+    private val now = Instant.parse("2026-01-15T12:00:00Z")
+    private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val manager = LockManager(repository, clock)
 
     private val blockId = 1L
-    private val future = Instant.now().plus(Duration.ofHours(2))
-    private val past = Instant.now().minus(Duration.ofHours(2))
+    private val future = now.plus(Duration.ofHours(2))
+    private val past = now.minus(Duration.ofHours(2))
 
     private fun givenLock(lock: Lock?) {
         coEvery { repository.getLockForBlock(blockId) } returns lock
@@ -59,6 +63,18 @@ class LockManagerTest {
 
         givenLock(timerLock(past))
         assertFalse(manager.isBlockLocked(blockId))
+    }
+
+    @Test
+    fun `timer lock expiring exactly now is not locked`() = runTest {
+        givenLock(timerLock(now))
+        assertFalse(manager.isBlockLocked(blockId))
+    }
+
+    @Test
+    fun `timer lock expiring one millisecond from now is still locked`() = runTest {
+        givenLock(timerLock(now.plusMillis(1)))
+        assertTrue(manager.isBlockLocked(blockId))
     }
 
     @Test
@@ -133,13 +149,10 @@ class LockManagerTest {
         val captured = slot<Instant>()
         coEvery { repository.setLock(blockId, LockMode.TIMER, capture(captured)) } returns Unit
 
-        val before = Instant.now()
         val result = manager.lockForDuration(blockId, Duration.ofHours(1))
-        val after = Instant.now()
 
         assertTrue(result.isSuccess)
-        assertFalse(captured.captured.isBefore(before.plus(Duration.ofHours(1))))
-        assertFalse(captured.captured.isAfter(after.plus(Duration.ofHours(1))))
+        assertEquals(now.plus(Duration.ofHours(1)), captured.captured)
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.tyler.selfcontrol.domain
 import com.tyler.selfcontrol.data.model.Lock
 import com.tyler.selfcontrol.data.model.LockMode
 import com.tyler.selfcontrol.data.repository.BlockRepository
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
@@ -14,11 +15,16 @@ import javax.inject.Singleton
  * Lock rules:
  * - Allowed while locked: add to blocklist, rename block
  * - Disallowed while locked: remove from blocklist, disable block, delete block
+ *
+ * Time is read from the injected [Clock] so expiry logic is deterministic in tests.
  */
 @Singleton
 class LockManager @Inject constructor(
-    private val blockRepository: BlockRepository
+    private val blockRepository: BlockRepository,
+    private val clock: Clock
 ) {
+    private fun now(): Instant = clock.instant()
+
     /**
      * Check if a block is currently locked (active lock that hasn't expired).
      */
@@ -29,7 +35,7 @@ class LockManager @Inject constructor(
             LockMode.FOREVER -> true
             LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
                 val unlockTime = lock.unlockTime ?: return false
-                Instant.now().isBefore(unlockTime)
+                now().isBefore(unlockTime)
             }
         }
     }
@@ -63,7 +69,7 @@ class LockManager @Inject constructor(
             return Result.failure(LockException("Block is already locked"))
         }
 
-        if (unlockTime.isBefore(Instant.now())) {
+        if (unlockTime.isBefore(now())) {
             return Result.failure(LockException("Unlock time must be in the future"))
         }
 
@@ -83,7 +89,7 @@ class LockManager @Inject constructor(
             return Result.failure(LockException("Duration must be positive"))
         }
 
-        val unlockTime = Instant.now().plus(duration)
+        val unlockTime = now().plus(duration)
         blockRepository.setLock(blockId, LockMode.TIMER, unlockTime)
         return Result.success(Unit)
     }
@@ -112,7 +118,7 @@ class LockManager @Inject constructor(
             LockMode.FOREVER -> return Result.failure(LockException("Forever locks cannot be manually unlocked"))
             LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
                 val unlockTime = lock.unlockTime
-                if (unlockTime != null && Instant.now().isBefore(unlockTime)) {
+                if (unlockTime != null && now().isBefore(unlockTime)) {
                     return Result.failure(LockException("Lock has not expired yet"))
                 }
             }
@@ -149,7 +155,7 @@ class LockManager @Inject constructor(
             LockMode.FOREVER -> null
             LockMode.UNTIL_DATETIME, LockMode.TIMER -> {
                 val unlockTime = lock.unlockTime ?: return null
-                val now = Instant.now()
+                val now = now()
                 if (now.isBefore(unlockTime)) {
                     Duration.between(now, unlockTime)
                 } else {
@@ -167,7 +173,7 @@ class LockManager @Inject constructor(
         return when (lock.mode) {
             LockMode.TIMER, LockMode.UNTIL_DATETIME -> {
                 val unlockTime = lock.unlockTime ?: return false
-                Instant.now().isBefore(unlockTime)
+                now().isBefore(unlockTime)
             }
             else -> false
         }
@@ -189,8 +195,8 @@ class LockManager @Inject constructor(
             return Result.failure(LockException("Duration must be positive"))
         }
 
-        val currentUnlockTime = lock.unlockTime ?: Instant.now()
-        val baseTime = if (Instant.now().isAfter(currentUnlockTime)) Instant.now() else currentUnlockTime
+        val currentUnlockTime = lock.unlockTime ?: now()
+        val baseTime = if (now().isAfter(currentUnlockTime)) now() else currentUnlockTime
         val newUnlockTime = baseTime.plus(additionalDuration)
 
         blockRepository.setLock(blockId, lock.mode, newUnlockTime)
@@ -210,7 +216,7 @@ class LockManager @Inject constructor(
             return Result.failure(LockException("Only timer and until-datetime locks can be extended"))
         }
 
-        if (newUnlockTime.isBefore(Instant.now())) {
+        if (newUnlockTime.isBefore(now())) {
             return Result.failure(LockException("New unlock time must be in the future"))
         }
 
@@ -234,19 +240,19 @@ class LockManager @Inject constructor(
             LockMode.FOREVER -> "Locked forever"
             LockMode.UNTIL_DATETIME -> {
                 val unlockTime = lock.unlockTime
-                if (unlockTime == null || Instant.now().isAfter(unlockTime)) {
+                if (unlockTime == null || now().isAfter(unlockTime)) {
                     "Lock expired"
                 } else {
-                    val remaining = Duration.between(Instant.now(), unlockTime)
+                    val remaining = Duration.between(now(), unlockTime)
                     "Unlocks in ${formatDuration(remaining)}"
                 }
             }
             LockMode.TIMER -> {
                 val unlockTime = lock.unlockTime
-                if (unlockTime == null || Instant.now().isAfter(unlockTime)) {
+                if (unlockTime == null || now().isAfter(unlockTime)) {
                     "Lock expired"
                 } else {
-                    val remaining = Duration.between(Instant.now(), unlockTime)
+                    val remaining = Duration.between(now(), unlockTime)
                     "Unlocks in ${formatDuration(remaining)}"
                 }
             }
