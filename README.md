@@ -5,13 +5,19 @@
 
 An Android self-control app that blocks distracting apps and websites using **Device Owner APIs** — the same device-management layer used by enterprise MDM software. Unlike accessibility-service blockers, restrictions enforced at the Device Owner level cannot be bypassed by simply uninstalling the app.
 
-<!-- TODO: add screenshots / demo GIF here -->
+<table>
+  <tr>
+    <td align="center"><img src="docs/AndroidBlocker_Rules.png"/></td>
+    <td align="center"><img src="docs/AndroidBlocker_AppBlocking.png"/></td>
+    <td align="center"><img src="docs/AndroidBlocker_WebsiteBlocking.png"/></td>
+  </tr>
+</table>
 
 ## Features
 
 - **Blocks** — Named groups of app and website rules, toggled on/off from the main screen
 - **Schedules** — Automatically activate blocks on chosen days and time ranges, including overnight windows (e.g. 10 PM – 6 AM)
-- **Locks** — Commit to a block by locking it until a date, for a timer duration, or forever; locked blocks can *add* restrictions but never *remove* them
+- **Locks** — Commit to a block by locking it until a date, for a timer duration, or forever; locked blocks can _add_ restrictions but never _remove_ them
 - **Website blocking** — Pushes URL blocklists directly into Chrome via managed configurations; also forces Google SafeSearch, YouTube Restricted Mode, and disables incognito mode
 - **App installation control** — New installs are evaluated against an allowlist/blacklist; restricted categories (social, games, browsers, entertainment) require a 24-hour cooldown with a limited approval window
 
@@ -27,7 +33,7 @@ Most app blockers rely on accessibility services or usage-stats polling, which t
 
 A few problems that turned out to be more interesting than they looked:
 
-- **Add-only lock semantics.** A locked block must allow *tightening* (add an app, extend the lock) while forbidding *loosening* (remove a rule, disable, shorten). `LockManager` models every operation as an explicit `LockOperation` enum checked against lock state, so the rule is enforced in one place instead of scattered through the UI.
+- **Add-only lock semantics.** A locked block must allow _tightening_ (add an app, extend the lock) while forbidding _loosening_ (remove a rule, disable, shorten). `LockManager` models every operation as an explicit `LockOperation` enum checked against lock state, so the rule is enforced in one place instead of scattered through the UI.
 - **Overnight schedules.** A 10 PM – 6 AM schedule on "Monday" needs to stay active into Tuesday morning — evaluation checks both "today after start" and "yesterday enabled, before end," including the Sunday→Monday week wraparound.
 - **Three-source blocking.** The suspended-package set is the union of (1) rules from active blocks, (2) a permanent blacklist, and (3) any non-system app not on the allowlist — so a newly sideloaded app is blocked by default the moment `PackageChangeReceiver` sees it.
 - **Surviving reboots and rebuilds.** A `BootReceiver` restarts the foreground service, WorkManager re-schedules the periodic workers, and debug builds sign with the same release keystore so Device Owner status survives every `adb install` during development.
