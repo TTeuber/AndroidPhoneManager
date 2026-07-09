@@ -38,11 +38,14 @@ architecture diagram), CI-friendly signing fallback, dependency catalog cleanup.
 
 ## Testing
 
-- [ ] **Room DAO tests** (instrumented or Robolectric) for the critical
+- [x] **Room DAO tests** (instrumented or Robolectric) for the critical
       `getBlockedPackageNames()` query and cascade deletes.
-- [ ] **Tests for `AppInstallationManager`** (cooldown window math: 24-hour wait,
-      3–6 PM approval window, expiration).
-- [ ] **Tests for `UrlParser` / website rule matching.**
+      (`BlockDaoTest`, 14 Robolectric tests with an in-memory Room DB.)
+- [x] **Tests for `AppInstallationManager`** (cooldown window math: 24-hour wait,
+      3–6 PM approval window, expiration). (`AppInstallationManagerTest`, 26 tests;
+      `Clock` injected like `LockManager` for deterministic time.)
+- [x] **Tests for `UrlParser` / website rule matching.**
+      (`ParsedUrlTest` + `WebsiteRuleChromeFormatTest`, 32 tests.)
 
 ## Features / completeness
 

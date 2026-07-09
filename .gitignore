@@ -21,3 +21,4 @@ keystore.properties
 # dev files
 ISSUES.md
 *plan.md
+.kotlin/

@@ -10,10 +10,10 @@ import com.tyler.selfcontrol.data.model.CooldownRequest
 import com.tyler.selfcontrol.data.model.CooldownStatus
 import com.tyler.selfcontrol.data.repository.AppInstallationRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,12 +21,15 @@ import javax.inject.Singleton
  * Manages app installation control including:
  * - Evaluating whether apps can be installed
  * - Managing the cooldown queue
+ *
+ * Time is read from the injected [Clock] so cooldown-window math is deterministic in tests.
  */
 @Singleton
 class AppInstallationManager @Inject constructor(
     private val playStoreParser: PlayStoreParser,
     private val repository: AppInstallationRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val clock: Clock
 ) {
     companion object {
         private const val TAG = "AppInstallationManager"
@@ -124,7 +127,7 @@ class AppInstallationManager @Inject constructor(
             return Result.failure(AppInstallationException("Request is not in approval window"))
         }
 
-        val now = Instant.now()
+        val now = clock.instant()
         if (now.isBefore(request.windowStart)) {
             return Result.failure(AppInstallationException("Approval window has not opened yet"))
         }
@@ -213,8 +216,8 @@ class AppInstallationManager @Inject constructor(
      * Calculate the cooldown window (3-6pm next day).
      */
     fun calculateCooldownWindow(): Pair<Instant, Instant> {
-        val tomorrow = LocalDate.now().plusDays(1)
-        val zoneId = ZoneId.systemDefault()
+        val tomorrow = LocalDate.now(clock).plusDays(1)
+        val zoneId = clock.zone
 
         val windowStart = tomorrow
             .atTime(LocalTime.of(COOLDOWN_WINDOW_START_HOUR, 0))
