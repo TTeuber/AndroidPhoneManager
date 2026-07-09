@@ -20,5 +20,6 @@ keystore.properties
 
 # dev files
 ISSUES.md
+IMPROVEMENTS.md
 *plan.md
 .kotlin/
